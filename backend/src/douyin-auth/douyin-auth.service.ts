@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import {
   hasLoggedInCookieHeader,
-  maskCookieHeader,
   normalizeCookieHeader,
 } from './douyin-auth-cookie.util';
 import { UserAdminAuditLog } from '../admin/entities/user-admin-audit-log.entity';
@@ -73,7 +72,7 @@ export class DouyinAuthService {
       updatedAt: snapshot.entity?.updatedAt
         ? snapshot.entity.updatedAt.toISOString()
         : null,
-      cookiePreview: maskCookieHeader(snapshot.cookie),
+      cookiePreview: null,
     };
   }
 

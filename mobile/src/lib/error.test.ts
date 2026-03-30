@@ -28,10 +28,10 @@ test('returns generic connectivity guidance when network error hits remote api b
     },
     '请求失败',
     {
-      apiBaseUrl: 'http://192.168.31.173:3001/api',
+      apiBaseUrl: 'http://192.168.1.10:3001/api',
     }
   );
 
-  assert.match(message, /192\.168\.31\.173:3001\/api/);
+  assert.match(message, /192\.168\.1\.10:3001\/api/);
   assert.doesNotMatch(message, /localhost/);
 });

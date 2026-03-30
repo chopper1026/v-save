@@ -73,7 +73,7 @@ describe('DouyinAuthService', () => {
 
     expect(status.source).toBe('environment');
     expect(status.hasCookie).toBe(true);
-    expect(status.cookiePreview).toContain('sessionid=abc');
+    expect(status.cookiePreview).toBeNull();
   });
 
   it('saves cookie into database session and exposes database source', async () => {

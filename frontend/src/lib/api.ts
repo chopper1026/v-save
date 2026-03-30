@@ -43,7 +43,7 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token =
-    useUserStore.getState().token || localStorage.getItem(TOKEN_STORAGE_KEY)
+    useUserStore.getState().token || sessionStorage.getItem(TOKEN_STORAGE_KEY)
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`

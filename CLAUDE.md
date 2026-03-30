@@ -156,5 +156,5 @@ docker compose --profile with-mysql up -d --build   # 使用 compose 内置 MySQ
 
 ## 文档与事实来源
 
-- 优先阅读：`README.md` 与 `docs/plans/README.md`。
-- 涉及 API 契约、部署口径、双端检查项时，按 `docs/plans/README.md` 中“当前事实文档”与维护规则同步更新。
+- 优先阅读：`README.md`。
+- 涉及 API 契约、部署口径、双端检查项时，以 `README.md`、对应源码与 `scripts/deploy.sh` 为准。
