@@ -1,0 +1,108 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - link "V-SAVE" [ref=e7] [cursor=pointer]:
+        - /url: /
+        - img [ref=e9]
+        - generic [ref=e12]: V-SAVE
+      - generic [ref=e13]:
+        - link "会员中心" [ref=e14] [cursor=pointer]:
+          - /url: /vip
+          - img [ref=e15]
+          - generic [ref=e17]: 会员中心
+        - link "paye2e" [ref=e18] [cursor=pointer]:
+          - /url: /user
+          - img [ref=e20]
+          - generic [ref=e23]: paye2e
+        - link "通知中心" [ref=e24] [cursor=pointer]:
+          - /url: /user?tab=notifications
+          - img [ref=e25]
+          - generic [ref=e82]: "4"
+  - main [ref=e28]:
+    - generic [ref=e30]:
+      - complementary [ref=e32]:
+        - navigation [ref=e33]:
+          - link "个人资料" [ref=e34] [cursor=pointer]:
+            - /url: /user
+            - img [ref=e35]
+            - generic [ref=e38]: 个人资料
+          - link "下载历史" [ref=e39] [cursor=pointer]:
+            - /url: /user?tab=history
+            - img [ref=e40]
+            - generic [ref=e43]: 下载历史
+          - link "订单记录" [ref=e44] [cursor=pointer]:
+            - /url: /user?tab=orders
+            - img [ref=e45]
+            - generic [ref=e47]: 订单记录
+          - link "通知中心" [ref=e48] [cursor=pointer]:
+            - /url: /user?tab=notifications
+            - img [ref=e49]
+            - generic [ref=e52]: 通知中心
+          - link "会员中心" [ref=e53] [cursor=pointer]:
+            - /url: /vip
+            - img [ref=e54]
+            - generic [ref=e56]: 会员中心
+          - link "账户设置" [ref=e57] [cursor=pointer]:
+            - /url: /user?tab=settings
+            - img [ref=e58]
+            - generic [ref=e61]: 账户设置
+        - button "退出登录" [ref=e63] [cursor=pointer]:
+          - img [ref=e64]
+          - generic [ref=e67]: 退出登录
+      - generic [ref=e69]:
+        - generic [ref=e70]:
+          - generic [ref=e71]:
+            - heading "订单记录" [level=3] [ref=e72]
+            - paragraph [ref=e73]: 查看会员套餐支付与退款状态
+          - button "刷新" [ref=e74] [cursor=pointer]
+        - generic [ref=e75]:
+          - generic [ref=e83]:
+            - generic [ref=e84]:
+              - generic [ref=e85]:
+                - generic [ref=e86]: PO20260328174215334BEY
+                - generic [ref=e87]: 创建时间：2026/3/28 17:42:21
+              - generic [ref=e88]: 待支付
+            - generic [ref=e89]:
+              - generic [ref=e90]: 套餐：季卡会员
+              - generic [ref=e91]: 金额：CNY 19.90
+              - generic [ref=e92]: 支付时间：--
+            - button "继续支付" [ref=e93] [cursor=pointer]
+          - generic [ref=e94]:
+            - generic [ref=e95]:
+              - generic [ref=e96]:
+                - generic [ref=e97]: PO20260327091233ML2NU7
+                - generic [ref=e98]: 创建时间：2026/3/27 09:12:35
+              - generic [ref=e99]: 已过期
+            - generic [ref=e100]:
+              - generic [ref=e101]: 套餐：月卡会员
+              - generic [ref=e102]: 金额：CNY 19.90
+              - generic [ref=e103]: 支付时间：--
+            - generic [ref=e104]: 订单已超过恢复窗口，不能继续支付。
+            - button "重新购买" [ref=e105] [cursor=pointer]
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - generic [ref=e108]:
+                - generic [ref=e109]: PO2026032709112319RJIH
+                - generic [ref=e110]: 创建时间：2026/3/27 09:11:24
+              - generic [ref=e111]: 已支付
+            - generic [ref=e112]:
+              - generic [ref=e113]: 套餐：月卡会员
+              - generic [ref=e114]: 金额：CNY 19.90
+              - generic [ref=e115]: 支付时间：2026/3/27 09:11:24
+            - button "查看会员权益" [ref=e116] [cursor=pointer]
+          - generic [ref=e117]:
+            - generic [ref=e118]:
+              - generic [ref=e119]:
+                - generic [ref=e120]: PO20260327084911QJ5CFX
+                - generic [ref=e121]: 创建时间：2026/3/27 08:49:12
+              - generic [ref=e122]: 已支付
+            - generic [ref=e123]:
+              - generic [ref=e124]: 套餐：月卡会员
+              - generic [ref=e125]: 金额：CNY 19.90
+              - generic [ref=e126]: 支付时间：2026/3/27 08:52:50
+            - button "查看会员权益" [ref=e127] [cursor=pointer]
+        - generic [ref=e77]:
+          - paragraph [ref=e78]: 共 4 条订单，第 1 / 1 页
+          - generic [ref=e79]:
+            - button "上一页" [disabled] [ref=e80]
+            - button "下一页" [disabled] [ref=e81]

@@ -1,0 +1,107 @@
+services:
+  mysql:
+    profiles: ["with-mysql"]
+    image: mysql:8.0
+    container_name: video-downloader-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-video_downloader}
+      MYSQL_USER: ${MYSQL_USER:-app_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-app_password}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - video-downloader-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: video-downloader-backend
+    env_file:
+      - ./backend/.env
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_TYPE: mysql
+      DATABASE_HOST: ${DATABASE_HOST:-host.docker.internal}
+      DATABASE_PORT: ${DATABASE_PORT:-3306}
+      DATABASE_USER: ${DATABASE_USER:-root}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-root}
+      DATABASE_NAME: ${DATABASE_NAME:-video_downloader}
+      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-true}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
+      PORT: 3001
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:3000,http://127.0.0.1:3000,http://localhost:4871,http://127.0.0.1:4871}
+      WEB_PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN:-http://localhost:4871}
+      FFMPEG_PATH: ${FFMPEG_PATH:-ffmpeg}
+      YTDLP_PATH: ${YTDLP_PATH:-yt-dlp}
+      PUPPETEER_EXECUTABLE_PATH: ${PUPPETEER_EXECUTABLE_PATH:-/usr/bin/chromium}
+      KUAISHOU_CHROME_PATH: ${KUAISHOU_CHROME_PATH:-/usr/bin/chromium}
+      NODE_OPTIONS: ${NODE_OPTIONS:---max-old-space-size=768}
+      TZ: ${TZ:-Asia/Shanghai}
+    mem_limit: 1536m
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://127.0.0.1:3001/api',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - backend_tmp:/app/tmp
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - video-downloader-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    container_name: video-downloader-frontend
+    restart: always
+    ports:
+      - "4871:80"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - video-downloader-network
+
+volumes:
+  mysql_data:
+  backend_tmp:
+
+networks:
+  video-downloader-network:
+    driver: bridge

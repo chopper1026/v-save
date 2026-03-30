@@ -1,0 +1,5 @@
+.DS_Store
+.derived-data/
+node_modules/
+release/
+*.xcodeproj/

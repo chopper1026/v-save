@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.vite/
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+._*
+
+# Claude local workspace
+.claude/
+
+# Worktrees
+.worktrees/
+worktrees/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test
+coverage/
+
+# Runtime artifacts
+backend/tmp/
+.gstack/
+
+# QA artifacts
+/qa-*.md
+/qa-*.txt
+/qa-*.png
