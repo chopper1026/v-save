@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="V-SAVE Companion">
+  <defs>
+    <linearGradient id="baseGradient" x1="170" y1="116" x2="852" y2="928" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2b313d" />
+      <stop offset="0.38" stop-color="#14181f" />
+      <stop offset="1" stop-color="#050608" />
+    </linearGradient>
+    <linearGradient id="topGloss" x1="512" y1="92" x2="512" y2="354" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.26" />
+      <stop offset="0.42" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <radialGradient id="baseLift" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(332 238) rotate(45) scale(434)">
+      <stop offset="0" stop-color="#7382a6" stop-opacity="0.18" />
+      <stop offset="0.48" stop-color="#7382a6" stop-opacity="0.05" />
+      <stop offset="1" stop-color="#7382a6" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="vMain" x1="372" y1="212" x2="640" y2="862" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="0.56" stop-color="#f1f4fa" />
+      <stop offset="1" stop-color="#d3d8e3" />
+    </linearGradient>
+    <linearGradient id="vLeftFacet" x1="292" y1="250" x2="522" y2="850" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c8d1e1" />
+      <stop offset="0.5" stop-color="#a8b1c2" />
+      <stop offset="1" stop-color="#81899a" />
+    </linearGradient>
+    <linearGradient id="vRightFacet" x1="636" y1="222" x2="560" y2="846" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="0.44" stop-color="#e8edf6" />
+      <stop offset="1" stop-color="#b8c0cf" />
+    </linearGradient>
+    <linearGradient id="vHighlight" x1="394" y1="208" x2="512" y2="732" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.84" />
+      <stop offset="0.36" stop-color="#ffffff" stop-opacity="0.34" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <filter id="panelShadow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse">
+      <feOffset dy="24" />
+      <feGaussianBlur stdDeviation="32" />
+      <feColorMatrix values="0 0 0 0 0.01 0 0 0 0 0.015 0 0 0 0 0.028 0 0 0 0.35 0" />
+    </filter>
+    <filter id="vShadow" x="0" y="0" width="1024" height="1024" filterUnits="userSpaceOnUse">
+      <feOffset dy="20" />
+      <feGaussianBlur stdDeviation="16" />
+      <feColorMatrix values="0 0 0 0 0.02 0 0 0 0 0.03 0 0 0 0 0.06 0 0 0 0.28 0" />
+    </filter>
+  </defs>
+
+  <g filter="url(#panelShadow)">
+    <rect x="74" y="70" width="876" height="876" rx="206" fill="url(#baseGradient)" />
+  </g>
+
+  <rect x="74" y="70" width="876" height="876" rx="206" fill="url(#baseGradient)" />
+  <rect x="74" y="70" width="876" height="876" rx="206" fill="url(#baseLift)" />
+  <path d="M162 132c72-30 190-48 350-48 176 0 300 16 364 50v178H162V132z" fill="url(#topGloss)" />
+  <rect x="90" y="86" width="844" height="844" rx="190" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="14" />
+  <path d="M180 752c132 48 264 70 396 70 92 0 188-12 286-38 18-4 34 12 28 30-22 72-86 130-170 152H312c-96-22-154-70-188-154-6-18 6-36 24-60z" fill="#000000" fill-opacity="0.16" />
+
+  <g filter="url(#vShadow)">
+    <path d="M300 238h132l88 322 88-322h132L584 858H440L300 238z" fill="url(#vMain)" />
+  </g>
+
+  <path d="M300 238h132l88 322 88-322h132L584 858H440L300 238z" fill="url(#vMain)" />
+  <path d="M300 238h132l88 322-102 298L300 238z" fill="url(#vLeftFacet)" fill-opacity="0.58" />
+  <path d="M608 238h132L584 858 482 560l126-322z" fill="url(#vRightFacet)" fill-opacity="0.44" />
+  <path d="M364 238h48l116 420-24 70L364 238z" fill="url(#vHighlight)" />
+  <path d="M532 560 608 238h44L556 582 532 560z" fill="#ffffff" fill-opacity="0.2" />
+  <path d="M476 808h112l-26 50H502L476 808z" fill="#aeb7c8" fill-opacity="0.56" />
+</svg>

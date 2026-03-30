@@ -1,0 +1,99 @@
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { UsersService } from '../users/users.service';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private usersService: UsersService,
+    private jwtService: JwtService,
+  ) {}
+
+  async validateUser(email: string, password: string): Promise<any> {
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      return null;
+    }
+
+    if (this.usersService.isUserDisabled(user)) {
+      throw new UnauthorizedException('账号已被禁用，请联系管理员');
+    }
+
+    const isPasswordValid = await this.usersService.validatePassword(user, password);
+    if (!isPasswordValid) {
+      return null;
+    }
+
+    const syncedUser = this.usersService.normalizeMembershipState(
+      await this.usersService.syncRoleByPolicy(user),
+    );
+    const { password: _, ...result } = syncedUser;
+    return result;
+  }
+
+  async login(loginDto: LoginDto) {
+    const user = await this.validateUser(loginDto.email, loginDto.password);
+    if (!user) {
+      throw new UnauthorizedException('邮箱或密码错误');
+    }
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      accountStatus: user.accountStatus,
+      membershipLevel: user.membershipLevel,
+    };
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        email: user.email,
+        nickname: user.nickname,
+        role: user.role,
+        membershipLevel: user.membershipLevel,
+        accountStatus: user.accountStatus,
+        avatar: user.avatar,
+        phone: user.phone,
+        vipExpireDate: user.vipExpireDate,
+        downloadCount: user.downloadCount,
+      },
+    };
+  }
+
+  async register(registerDto: RegisterDto) {
+    const user = await this.usersService.create(
+      registerDto.email,
+      registerDto.password,
+      registerDto.nickname,
+    );
+
+    const syncedUser = this.usersService.normalizeMembershipState(
+      await this.usersService.syncRoleByPolicy(user),
+    );
+    const payload = {
+      sub: syncedUser.id,
+      email: syncedUser.email,
+      role: syncedUser.role,
+      accountStatus: syncedUser.accountStatus,
+      membershipLevel: syncedUser.membershipLevel,
+    };
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: syncedUser.id,
+        email: syncedUser.email,
+        nickname: syncedUser.nickname,
+        role: syncedUser.role,
+        membershipLevel: syncedUser.membershipLevel,
+        accountStatus: syncedUser.accountStatus,
+        avatar: syncedUser.avatar,
+        phone: syncedUser.phone,
+        vipExpireDate: syncedUser.vipExpireDate,
+        downloadCount: syncedUser.downloadCount,
+      },
+    };
+  }
+}

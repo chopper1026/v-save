@@ -1,0 +1,11 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="vsave-logo-gradient" x1="40" y1="28" x2="214" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38BDF8" />
+      <stop offset="1" stop-color="#2563EB" />
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#vsave-logo-gradient)" />
+  <rect x="54" y="80" width="102" height="96" rx="20" stroke="white" stroke-width="14" />
+  <path d="M154 109L206 82V174L154 147V109Z" fill="white" />
+</svg>

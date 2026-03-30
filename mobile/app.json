@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "V-SAVE",
+    "slug": "vsave-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "vsave",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EEF3FF"
+    },
+    "ios": {
+      "icon": "./assets/ios-icon-tech-frosted-play.png",
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vsave.mobile",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "V-SAVE 需要访问相册以保存下载的视频。",
+        "NSPhotoLibraryAddUsageDescription": "V-SAVE 需要将下载的视频保存到相册。"
+      }
+    },
+    "android": {
+      "package": "com.vsave.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "ios": {
+            "backgroundColor": "#EEF3FF",
+            "image": "./assets/ios-splash-tech-frosted-play-transparent.png",
+            "resizeMode": "contain",
+            "imageWidth": 248
+          }
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1
+          },
+          "androidIntentFilters": ["text/*"]
+        }
+      ]
+    ]
+  }
+}

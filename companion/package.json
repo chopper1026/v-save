@@ -1,0 +1,13 @@
+{
+  "name": "vsave-companion",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "generate:icons": "./scripts/generate_icons.sh",
+    "generate:xcodeproj": "./scripts/generate_project.sh",
+    "dev": "./scripts/dev.sh",
+    "build": "./scripts/build.sh",
+    "test": "./scripts/test.sh",
+    "dist:mac": "./scripts/dist_mac.sh"
+  }
+}
