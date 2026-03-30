@@ -112,6 +112,24 @@ docker compose --profile with-mysql up -d --build
 - Web: `http://localhost:4871`
 - Backend（给 Mobile）: `http://<LAN-IP>:3001/api`
 
+## 一键部署（前后端 + MySQL）
+
+可直接在服务器执行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh)
+```
+
+脚本特性：
+
+- 全部使用 Docker 部署：`frontend + backend + mysql`
+- 自动识别 `amd64 / arm64 / armv7` 等常见架构
+- 自动探测中国大陆网络并启用 Docker / npm / pip / 系统包镜像加速
+- 自动检测 Docker / Docker Compose，缺失时会中文提示是否安装
+- 自动生成强密码并写入部署目录下的 `.env` 与 `backend/.env`
+- 部署完成后会在终端用中文展示访问地址、数据库用户名和密码
+- 若当前数据库为空，第一个注册用户会自动设置为超级管理员
+
 ## API 概览
 
 ### 认证
