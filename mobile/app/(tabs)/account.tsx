@@ -17,7 +17,7 @@ import { AccountTabSkeleton } from '@/components/tab-first-render-skeletons';
 import { colors } from '@/constants/theme';
 import { api, mapApiUserToMobileUser } from '@/lib/api';
 import { useAuthStore } from '@/store/auth-store';
-import type { SubscriptionStatusSummary, UserProfile } from '@/types/api';
+import type { UserProfile } from '@/types/api';
 
 const MAX_AVATAR_BYTES = 8 * 1024 * 1024;
 
@@ -45,65 +45,16 @@ const getErrorMessage = (err: any, fallback: string) => {
   return fallback;
 };
 
-const normalizeSubscriptionStatus = (
-  payload: Partial<SubscriptionStatusSummary> | null | undefined,
-  fallbackMembershipLevel: 'FREE' | 'VIP',
-  fallbackVipExpireDate?: string | null,
-): SubscriptionStatusSummary => {
-  const membershipLevel = payload?.membershipLevel === 'VIP' ? 'VIP' : fallbackMembershipLevel;
-  const benefits = payload?.benefits;
-  const quota = payload?.quota;
-
-  return {
-    membershipLevel,
-    vipExpireDate: payload?.vipExpireDate ?? fallbackVipExpireDate ?? null,
-    isLifetime:
-      Boolean(payload?.isLifetime)
-      || (membershipLevel === 'VIP' && !(payload?.vipExpireDate ?? fallbackVipExpireDate ?? null)),
-    benefits: {
-      supportedPlatforms:
-        benefits?.supportedPlatforms === 'ALL'
-          ? 'ALL'
-          : Array.isArray(benefits?.supportedPlatforms) && benefits.supportedPlatforms.length
-            ? benefits.supportedPlatforms
-            : ['douyin', 'bilibili'],
-      maxQuality: benefits?.maxQuality || (membershipLevel === 'VIP' ? '4k' : '720p'),
-      unlimitedDownloads:
-        typeof benefits?.unlimitedDownloads === 'boolean'
-          ? benefits.unlimitedDownloads
-          : membershipLevel === 'VIP',
-    },
-    quota: {
-      usedToday: Number.isFinite(quota?.usedToday) ? Number(quota?.usedToday) : 0,
-      remainingToday:
-        quota?.remainingToday === null || quota?.remainingToday === undefined
-          ? membershipLevel === 'VIP'
-            ? null
-            : 0
-          : Number(quota.remainingToday),
-      dailyLimit:
-        quota?.dailyLimit === null || quota?.dailyLimit === undefined
-          ? membershipLevel === 'VIP'
-            ? null
-            : 5
-          : Number(quota.dailyLimit),
-    },
-  };
-};
-
 export default function AccountScreen() {
   const user = useAuthStore((state) => state.user);
   const updateUser = useAuthStore((state) => state.updateUser);
   const logout = useAuthStore((state) => state.logout);
   const userId = user?.id ?? null;
 
-  const [subscriptionStatus, setSubscriptionStatus] =
-    useState<SubscriptionStatusSummary | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [nickname, setNickname] = useState('');
   const [avatar, setAvatar] = useState('');
   const [phone, setPhone] = useState('');
-
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
@@ -124,28 +75,6 @@ export default function AccountScreen() {
       setAvatar(data.avatar || '');
       setPhone(data.phone || '');
       updateUser(mapApiUserToMobileUser(data));
-
-      try {
-        const subscriptionResponse = await api.get('/payments/subscription-status');
-        const payload = subscriptionResponse.data?.data as
-          | Partial<SubscriptionStatusSummary>
-          | undefined;
-        setSubscriptionStatus(
-          normalizeSubscriptionStatus(
-            payload,
-            data.membershipLevel === 'VIP' ? 'VIP' : 'FREE',
-            data.vipExpireDate ?? null,
-          ),
-        );
-      } catch (subscriptionError) {
-        setSubscriptionStatus(
-          normalizeSubscriptionStatus(
-            null,
-            data.membershipLevel === 'VIP' ? 'VIP' : 'FREE',
-            data.vipExpireDate ?? null,
-          ),
-        );
-      }
     } catch (err: any) {
       setError(getErrorMessage(err, '获取个人信息失败'));
     }
@@ -292,50 +221,14 @@ export default function AccountScreen() {
 
   const statusCode = profile?.accountStatus || user?.accountStatus || 'ACTIVE';
   const statusLabel = statusCode === 'DISABLED' ? '禁用' : '启用';
+  const roleLabel =
+    (profile?.role || user?.role || 'USER') === 'SUPER_ADMIN'
+      ? '超级管理员'
+      : '普通用户';
 
   if (loading) {
     return <AccountTabSkeleton />;
   }
-
-  const level = subscriptionStatus?.membershipLevel || profile?.membershipLevel || user?.membershipLevel || 'FREE';
-  const isVip = level === 'VIP';
-  const supportedPlatforms =
-    subscriptionStatus?.benefits.supportedPlatforms === 'ALL'
-      ? '全平台'
-      : subscriptionStatus?.benefits.supportedPlatforms?.length
-        ? subscriptionStatus.benefits.supportedPlatforms
-            .map((platform) => {
-              switch (platform) {
-                case 'douyin':
-                  return '抖音';
-                case 'bilibili':
-                  return '哔哩哔哩';
-                case 'xiaohongshu':
-                  return '小红书';
-                case 'kuaishou':
-                  return '快手';
-                case 'youtube':
-                  return 'YouTube';
-                default:
-                  return platform;
-              }
-            })
-            .join('、')
-        : '抖音、哔哩哔哩';
-  const membershipExpireLabel = subscriptionStatus?.isLifetime
-    ? '永久有效'
-    : subscriptionStatus?.vipExpireDate
-      ? new Date(subscriptionStatus.vipExpireDate).toLocaleString()
-      : isVip
-        ? '未获取到期时间'
-        : '未开通';
-  const quotaLabel = subscriptionStatus?.quota.dailyLimit
-    ? `${subscriptionStatus.quota.usedToday}/${subscriptionStatus.quota.dailyLimit}`
-    : '无限次';
-  const remainingQuotaLabel =
-    subscriptionStatus?.quota.remainingToday === null
-      ? '不限'
-      : `${subscriptionStatus?.quota.remainingToday ?? 0} 次`;
 
   return (
     <Screen>
@@ -359,19 +252,9 @@ export default function AccountScreen() {
           <View style={styles.heroMeta}>
             <Text style={styles.name}>{profile?.nickname || user?.name || '未设置昵称'}</Text>
             <Text style={styles.email}>{profile?.email || user?.email || '--'}</Text>
-            <View
-              style={[styles.levelBadge, isVip ? styles.levelBadgeVip : styles.levelBadgeFree]}
-            >
-              <Ionicons
-                name={isVip ? 'diamond-outline' : 'person-outline'}
-                size={13}
-                color={isVip ? '#7C2D12' : colors.primaryDark}
-              />
-              <Text
-                style={[styles.levelText, isVip ? styles.levelTextVip : styles.levelTextFree]}
-              >
-                {isVip ? 'VIP 会员' : '免费用户'}
-              </Text>
+            <View style={styles.levelBadge}>
+              <Ionicons name="shield-checkmark-outline" size={13} color={colors.primaryDark} />
+              <Text style={styles.levelText}>{roleLabel}</Text>
             </View>
           </View>
         </View>
@@ -430,40 +313,18 @@ export default function AccountScreen() {
       </View>
 
       <View style={styles.infoCard}>
-        <Text style={styles.sectionTitle}>会员信息总览</Text>
+        <Text style={styles.sectionTitle}>账户概览</Text>
         <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>会员状态</Text>
-          <Text style={styles.infoValue}>{isVip ? 'VIP 会员' : '免费用户'}</Text>
+          <Text style={styles.infoLabel}>角色</Text>
+          <Text style={styles.infoValue}>{roleLabel}</Text>
         </View>
-        <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>会员到期</Text>
-          <Text style={styles.infoValue}>{membershipExpireLabel}</Text>
-        </View>
-        <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>今日下载</Text>
-          <Text style={styles.infoValue}>{quotaLabel}</Text>
-        </View>
-        <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>今日剩余次数</Text>
-          <Text style={styles.infoValue}>{remainingQuotaLabel}</Text>
-        </View>
-        <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>支持平台</Text>
-          <Text style={styles.infoValue}>{supportedPlatforms}</Text>
-        </View>
-        <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>最高画质</Text>
-          <Text style={styles.infoValue}>
-            {String(subscriptionStatus?.benefits.maxQuality || (isVip ? '4k' : '720p')).toUpperCase()}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.infoCard}>
-        <Text style={styles.sectionTitle}>账户状态</Text>
         <View style={styles.infoLineWrap}>
           <Text style={styles.infoLabel}>账号状态</Text>
           <Text style={styles.infoValue}>{statusLabel}</Text>
+        </View>
+        <View style={styles.infoLineWrap}>
+          <Text style={styles.infoLabel}>手机号</Text>
+          <Text style={styles.infoValue}>{phone ? maskPhone(phone) : '未绑定'}</Text>
         </View>
         <View style={styles.infoLineWrap}>
           <Text style={styles.infoLabel}>累计下载次数</Text>
@@ -612,13 +473,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-  },
-  levelBadgeVip: {
-    borderWidth: 1,
-    borderColor: '#D5B86A',
-    backgroundColor: '#FDE9B6',
-  },
-  levelBadgeFree: {
     borderWidth: 1,
     borderColor: '#C8D8FA',
     backgroundColor: '#EEF4FF',
@@ -626,11 +480,6 @@ const styles = StyleSheet.create({
   levelText: {
     fontSize: 11,
     fontWeight: '800',
-  },
-  levelTextVip: {
-    color: '#7C2D12',
-  },
-  levelTextFree: {
     color: colors.primaryDark,
   },
   formCard: {
@@ -758,52 +607,49 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   modalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
     color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
   },
   modalInput: {
-    width: '100%',
-    height: 46,
+    minHeight: 46,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     color: colors.textPrimary,
-    backgroundColor: '#fff',
+    fontSize: 15,
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 8,
     justifyContent: 'flex-end',
+    gap: 10,
   },
   modalBtnGhost: {
-    minWidth: 76,
-    height: 38,
-    borderRadius: 10,
+    minWidth: 88,
+    height: 42,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   modalBtnGhostText: {
     color: colors.textSecondary,
-    fontSize: 13,
     fontWeight: '700',
   },
   modalBtnPrimary: {
-    minWidth: 82,
-    height: 38,
-    borderRadius: 10,
+    minWidth: 88,
+    height: 42,
+    borderRadius: 12,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   modalBtnPrimaryText: {
     color: '#fff',
-    fontSize: 13,
     fontWeight: '800',
   },
 });

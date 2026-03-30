@@ -1525,3 +1525,29 @@ describe('DownloadService getDownloadUrl', () => {
     expect(snapshot?.downloadUrl).toBeNull();
   });
 });
+
+describe('DownloadService checkDownloadPermission', () => {
+  it('allows active users to download any platform and quality without membership gating', async () => {
+    const usersService = {
+      findById: jest.fn().mockResolvedValue({
+        id: 'user-1',
+        accountStatus: 'ACTIVE',
+      }),
+    };
+    const service = new DownloadService(
+      {} as any,
+      {} as any,
+      {} as any,
+      usersService as any,
+      {} as any,
+    );
+
+    const result = await service.checkDownloadPermission({
+      userId: 'user-1',
+      platform: 'youtube',
+      quality: VideoQuality.UHD,
+    });
+
+    expect(result).toEqual({ allowed: true });
+  });
+});

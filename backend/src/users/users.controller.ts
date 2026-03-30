@@ -49,16 +49,6 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('vip/activate')
-  async activateVip(@Request() req) {
-    const user = await this.usersService.updateVIPStatus(req.user.id, true);
-    if (!user) {
-      throw new NotFoundException('用户不存在');
-    }
-    return this.sanitizeUser(user);
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Patch('account/password')
   async changePassword(
     @Request() req,

@@ -10,7 +10,7 @@
 当前阶段：`Web Beta 可用 + Mobile v1 稳定性持续优化`
 
 - 已完成：Web/Mobile 主链路、后台治理、通知中心、下载模式管理、Runtime 运行看板、Douyin Companion Bridge 基础设施
-- 进行中：支付闭环、Web/Mobile E2E 自动化、Runtime 失败态精度补齐、Companion 实机扫码回归
+- 进行中：Web/Mobile E2E 自动化、Runtime 失败态精度补齐、Companion 实机扫码回归
 - 强约束：任何 API 字段、错误码、默认值改动都要同步验证 **Web + Mobile**
 
 ## 核心能力
@@ -125,7 +125,6 @@ docker compose --profile with-mysql up -d --build
 - `PATCH /api/users/profile`
 - `PATCH /api/users/account/password`
 - `PATCH /api/users/account/phone`
-- `PATCH /api/users/vip/activate`
 
 ### Runtime 事件（端侧）
 
@@ -148,7 +147,7 @@ docker compose --profile with-mysql up -d --build
 2. `POST /api/download/get-url` 双端必须显式传 `clientType=WEB|MOBILE`。
 3. `runtimeTraceId` 与 `x-runtime-trace-id` 改动必须双端 + 后端同步验证。
 4. 抖音链路不引入匿名降级主路径，必须正确处理 `DOUYIN_SESSION_REQUIRED`。
-5. 登录态、会员态、通知态、下载态改动需提交双端联测证据。
+5. 登录态、通知态、下载态改动需提交双端联测证据。
 
 ## 测试与质量命令
 

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useUserStore } from '../store/useUserStore'
-import { Video, User, Crown, Bell, ShieldCheck } from 'lucide-react'
+import { Video, User, Bell, ShieldCheck } from 'lucide-react'
 import { useUnreadNotificationCount } from '../hooks/useUnreadNotificationCount'
 
 export default function Header() {
@@ -31,13 +31,6 @@ export default function Header() {
                   后台管理
                 </Link>
               )}
-              <Link
-                to="/vip"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors"
-              >
-                <Crown className="w-4 h-4" />
-                <span>会员中心</span>
-              </Link>
               <Link
                 to="/user"
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"

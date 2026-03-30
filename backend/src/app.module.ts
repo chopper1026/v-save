@@ -12,7 +12,6 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AuthHealthModule } from './auth-health/auth-health.module';
 import { AdminUsersModule } from './admin/admin-users.module';
 import { RuntimeMonitorModule } from './runtime-monitor/runtime-monitor.module';
-import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -28,7 +27,7 @@ import { PaymentsModule } from './payments/payments.module';
           port: parseInt(configService.get<string>('DATABASE_PORT', '3306'), 10),
           username: configService.get<string>('DATABASE_USER', 'root'),
           password: configService.get<string>('DATABASE_PASSWORD', ''),
-          database: configService.get<string>('DATABASE_NAME', 'video_downloader'),
+          database: configService.get<string>('DATABASE_NAME', 'v_save'),
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: configService.get<string>('DB_SYNCHRONIZE', 'true') === 'true',
         };
@@ -45,7 +44,6 @@ import { PaymentsModule } from './payments/payments.module';
     NotificationsModule,
     AuthHealthModule,
     AdminUsersModule,
-    PaymentsModule,
   ],
   controllers: [],
   providers: [],

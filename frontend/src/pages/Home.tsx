@@ -758,7 +758,7 @@ export default function Home() {
               ? responseData.message
               : typeof responseData?.message?.message === 'string'
                 ? responseData.message.message
-                : '当前账号权限不足，请升级VIP后重试'
+                : '当前账号权限不足，请稍后重试'
           setError(responseMessage)
         } else {
           const message = getAxiosErrorMessage(err)

@@ -21,7 +21,7 @@ const createMockQueryBuilder = (): MockQb => {
 };
 
 describe('AdminUsersService queryUsers filters', () => {
-  it('should filter users by role and membershipLevel', async () => {
+  it('should filter users by role and accountStatus', async () => {
     const qb = createMockQueryBuilder();
     const userRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(qb),
@@ -35,7 +35,7 @@ describe('AdminUsersService queryUsers filters', () => {
 
     await service.queryUsers({
       role: 'USER',
-      membershipLevel: 'VIP',
+      accountStatus: 'ACTIVE',
       page: 1,
       pageSize: 20,
     } as any);
@@ -44,14 +44,14 @@ describe('AdminUsersService queryUsers filters', () => {
       role: 'USER',
     });
     expect(qb.andWhere).toHaveBeenCalledWith(
-      'user.membershipLevel = :membershipLevel',
+      'user.accountStatus = :accountStatus',
       {
-        membershipLevel: 'VIP',
+        accountStatus: 'ACTIVE',
       },
     );
   });
 
-  it('should filter free users by membershipLevel only', async () => {
+  it('should ignore deprecated membership filters when querying users', async () => {
     const qb = createMockQueryBuilder();
     const userRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(qb),
@@ -64,16 +64,14 @@ describe('AdminUsersService queryUsers filters', () => {
     );
 
     await service.queryUsers({
-      membershipLevel: 'FREE',
+      membershipLevel: 'VIP',
       page: 1,
       pageSize: 20,
     } as any);
 
-    expect(qb.andWhere).toHaveBeenCalledWith(
+    expect(qb.andWhere).not.toHaveBeenCalledWith(
       'user.membershipLevel = :membershipLevel',
-      {
-        membershipLevel: 'FREE',
-      },
+      { membershipLevel: 'VIP' },
     );
   });
 });

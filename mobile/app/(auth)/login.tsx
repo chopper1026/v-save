@@ -11,6 +11,7 @@ import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/screen';
 import { colors } from '@/constants/theme';
+import { API_BASE_URL } from '@/lib/env';
 import { api, mapApiUserToMobileUser } from '@/lib/api';
 import { extractApiDebugDetails, extractApiErrorMessage } from '@/lib/error';
 import { useAuthStore } from '@/store/auth-store';
@@ -41,7 +42,9 @@ export default function LoginScreen() {
       login(mapApiUserToMobileUser(response.data.user), response.data.access_token);
       router.replace('/(tabs)/home');
     } catch (err: any) {
-      const message = extractApiErrorMessage(err, '登录失败，请稍后重试');
+      const message = extractApiErrorMessage(err, '登录失败，请稍后重试', {
+        apiBaseUrl: API_BASE_URL,
+      });
       if (__DEV__) {
         setError(`${message}\n${extractApiDebugDetails(err)}`);
       } else {

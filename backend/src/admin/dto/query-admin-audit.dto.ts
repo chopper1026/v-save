@@ -22,8 +22,8 @@ export class QueryAdminAuditDto {
   adminUserId?: string;
 
   @IsOptional()
-  @IsIn(['USER', 'ROLE', 'AUTH', 'DOWNLOAD_POLICY', 'PAYMENT'])
-  module?: 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY' | 'PAYMENT';
+  @IsIn(['USER', 'ROLE', 'AUTH', 'DOWNLOAD_POLICY'])
+  module?: 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY';
 
   @IsOptional()
   @IsIn(['BILIBILI', 'DOUYIN', 'NONE'])

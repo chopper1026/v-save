@@ -1,24 +1,22 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Activity, ClipboardList, KeyRound, Receipt, SlidersHorizontal, Users } from 'lucide-react'
+import { Activity, ClipboardList, KeyRound, SlidersHorizontal, Users } from 'lucide-react'
 import Header from '../components/Header'
 import AdminAuthManagement from '../components/AdminAuthManagement'
-import AdminOrderManagement from '../components/AdminOrderManagement'
 import DownloadModeManagement from '../components/DownloadModeManagement'
 import { api } from '../lib/api'
 import { useUserStore } from '../store/useUserStore'
 
-type AdminTab = 'users' | 'audit' | 'auth' | 'download-policy' | 'runtime' | 'orders'
+type AdminTab = 'users' | 'audit' | 'auth' | 'download-policy' | 'runtime'
 
 interface AdminUserItem {
   id: string
   email: string
   nickname: string
   role: 'SUPER_ADMIN' | 'USER'
-  membershipLevel: 'FREE' | 'VIP'
   accountStatus: 'ACTIVE' | 'DISABLED'
   phone: string | null
-  vipExpireDate: string | null
+  avatar?: string | null
   downloadCount: number
   createdAt: string
   updatedAt: string
@@ -31,7 +29,7 @@ interface AdminAuditItem {
   targetUserId: string
   targetEmail: string | null
   action: string
-  module: 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY' | 'PAYMENT'
+  module: 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY'
   platform: 'BILIBILI' | 'DOUYIN' | 'NONE'
   targetType: 'USER' | 'AUTH_SESSION' | 'SYSTEM'
   beforeState: Record<string, unknown> | null
@@ -50,7 +48,7 @@ interface PagedResponse<T> {
   }
 }
 
-type AuditModuleFilter = 'ALL' | 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY' | 'PAYMENT'
+type AuditModuleFilter = 'ALL' | 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY'
 type AuditPlatformFilter = 'ALL' | 'BILIBILI' | 'DOUYIN' | 'NONE'
 
 const USER_PAGE_SIZE_OPTIONS = [10, 20, 50]
@@ -61,11 +59,11 @@ const TABS: Array<{ id: AdminTab; label: string; icon: typeof Users }> = [
   { id: 'download-policy', label: '下载模式管理', icon: SlidersHorizontal },
   { id: 'auth', label: '登录态管理', icon: KeyRound },
   { id: 'users', label: '用户管理', icon: Users },
-  { id: 'orders', label: '订单管理', icon: Receipt },
   { id: 'audit', label: '操作审计', icon: ClipboardList },
 ]
 
 const DEFAULT_ADMIN_TAB: AdminTab = TABS[0]?.id ?? 'runtime'
+const AdminRuntimeDashboard = lazy(() => import('../components/AdminRuntimeDashboard'))
 
 const ROLE_LABEL_MAP: Record<'SUPER_ADMIN' | 'USER', string> = {
   SUPER_ADMIN: '超级管理员',
@@ -76,13 +74,6 @@ const STATUS_LABEL_MAP: Record<'ACTIVE' | 'DISABLED', string> = {
   ACTIVE: '启用',
   DISABLED: '禁用',
 }
-
-const MEMBERSHIP_LABEL_MAP: Record<'FREE' | 'VIP', string> = {
-  FREE: 'FREE',
-  VIP: 'VIP',
-}
-
-const AdminRuntimeDashboard = lazy(() => import('../components/AdminRuntimeDashboard'))
 
 const asRecord = (value: Record<string, unknown> | null | undefined) => {
   if (!value || typeof value !== 'object') {
@@ -110,10 +101,11 @@ export default function AdminUsers() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const rawTab = searchParams.get('tab')
-  const requestedTab = rawTab === 'roles' ? 'users' : rawTab
-  const activeTab: AdminTab = requestedTab && TABS.some((item) => item.id === requestedTab as AdminTab)
-    ? (requestedTab as AdminTab)
-    : DEFAULT_ADMIN_TAB
+  const requestedTab = rawTab === 'orders' ? 'users' : rawTab
+  const activeTab: AdminTab =
+    requestedTab && TABS.some((item) => item.id === requestedTab as AdminTab)
+      ? (requestedTab as AdminTab)
+      : DEFAULT_ADMIN_TAB
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
 
@@ -122,7 +114,6 @@ export default function AdminUsers() {
   const [usersError, setUsersError] = useState('')
   const [userKeyword, setUserKeyword] = useState('')
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'SUPER_ADMIN' | 'USER'>('ALL')
-  const [membershipFilter, setMembershipFilter] = useState<'ALL' | 'FREE' | 'VIP'>('ALL')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'DISABLED'>('ALL')
   const [userPage, setUserPage] = useState(1)
   const [userPageSize, setUserPageSize] = useState(10)
@@ -149,13 +140,6 @@ export default function AdminUsers() {
     return date.toLocaleString('zh-CN', { hour12: false })
   }
 
-  const formatDateOnly = (value?: string | null) => {
-    if (!value) return '--'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return '--'
-    return date.toLocaleDateString('zh-CN')
-  }
-
   const fetchUsers = useCallback(async () => {
     if (!isLoggedIn || !isSuperAdmin) {
       return
@@ -170,7 +154,6 @@ export default function AdminUsers() {
           pageSize: userPageSize,
           keyword: userKeyword.trim() || undefined,
           role: roleFilter !== 'ALL' ? roleFilter : undefined,
-          membershipLevel: membershipFilter !== 'ALL' ? membershipFilter : undefined,
           accountStatus: statusFilter !== 'ALL' ? statusFilter : undefined,
         },
       })
@@ -190,7 +173,6 @@ export default function AdminUsers() {
   }, [
     isLoggedIn,
     isSuperAdmin,
-    membershipFilter,
     roleFilter,
     statusFilter,
     userKeyword,
@@ -249,7 +231,6 @@ export default function AdminUsers() {
 
     if (!isSuperAdmin) {
       navigate('/user')
-      return
     }
   }, [isHydrated, isLoggedIn, isSuperAdmin, navigate])
 
@@ -299,20 +280,6 @@ export default function AdminUsers() {
     })
   }
 
-  const handleToggleMembership = async (item: AdminUserItem) => {
-    const nextLevel: 'FREE' | 'VIP' = item.membershipLevel === 'VIP' ? 'FREE' : 'VIP'
-    const defaultVipExpireDate =
-      item.vipExpireDate ||
-      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-
-    await withOperate(item.id, async () => {
-      await api.patch(`/admin/users/${item.id}/membership`, {
-        membershipLevel: nextLevel,
-        vipExpireDate: nextLevel === 'VIP' ? defaultVipExpireDate : undefined,
-      })
-    })
-  }
-
   const handleToggleStatus = async (item: AdminUserItem) => {
     const nextStatus: 'ACTIVE' | 'DISABLED' =
       item.accountStatus === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'
@@ -326,20 +293,17 @@ export default function AdminUsers() {
 
   const auditActionLabelMap = useMemo(() => ({
     UPDATE_ROLE: '角色调整',
-    UPDATE_MEMBERSHIP: '会员调整',
     UPDATE_STATUS: '状态调整',
     UPDATE_DOWNLOAD_MODE: '下载模式更新',
     UPDATE_DOWNLOAD_MODE_CONFIG: '下载模式更新',
     BILIBILI_QRCODE_GENERATED: 'B站二维码生成',
     BILIBILI_QRCODE_CONFIRMED: 'B站扫码确认',
-    BILIBILI_COOKIE_REFRESHED: 'B站Cookie刷新',
+    BILIBILI_COOKIE_REFRESHED: 'B站 Cookie 刷新',
     BILIBILI_SESSION_CLEARED: 'B站登录态清空',
     DOUYIN_QRCODE_GENERATED: '抖音二维码生成',
     DOUYIN_QRCODE_CONFIRMED: '抖音扫码确认',
-    DOUYIN_COOKIE_SAVED: '抖音Cookie保存',
+    DOUYIN_COOKIE_SAVED: '抖音 Cookie 保存',
     DOUYIN_SESSION_CLEARED: '抖音登录态清空',
-    PAYMENT_MANUAL_REPAIR: '支付补单',
-    PAYMENT_RECONCILIATION_RUN: '支付对账',
   } as Record<string, string>), [])
 
   const renderAuditDetail = (item: AdminAuditItem) => {
@@ -360,16 +324,6 @@ export default function AdminUsers() {
         const to = getString(after, 'accountStatus') as 'ACTIVE' | 'DISABLED'
         if (from && to) {
           return `账号状态由 ${STATUS_LABEL_MAP[from] || from} 调整为 ${STATUS_LABEL_MAP[to] || to}`
-        }
-        break
-      }
-      case 'UPDATE_MEMBERSHIP': {
-        const from = getString(before, 'membershipLevel') as 'FREE' | 'VIP'
-        const to = getString(after, 'membershipLevel') as 'FREE' | 'VIP'
-        const expireAt = getString(after, 'vipExpireDate')
-        if (from && to) {
-          const expireText = to === 'VIP' && expireAt ? `，到期 ${formatDateTime(expireAt)}` : ''
-          return `会员等级由 ${MEMBERSHIP_LABEL_MAP[from] || from} 调整为 ${MEMBERSHIP_LABEL_MAP[to] || to}${expireText}`
         }
         break
       }
@@ -409,21 +363,6 @@ export default function AdminUsers() {
         }
         if (to) {
           return `${targetLabel || '下载模式'} 已更新为 ${to}`
-        }
-        break
-      }
-      case 'PAYMENT_MANUAL_REPAIR': {
-        const orderNo = getString(after, 'orderNo')
-        if (orderNo) {
-          return `已对订单 ${orderNo} 执行补单`
-        }
-        break
-      }
-      case 'PAYMENT_RECONCILIATION_RUN': {
-        const bizDate = getString(after, 'bizDate')
-        const diffCount = getString(after, 'diffCount')
-        if (bizDate) {
-          return `${bizDate} 支付对账完成${diffCount ? `，差异 ${diffCount} 单` : ''}`
         }
         break
       }
@@ -489,11 +428,11 @@ export default function AdminUsers() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h1 className="text-xl font-semibold text-text-primary">用户管理</h1>
-                      <p className="text-sm text-text-secondary mt-1">统一管理用户状态、会员和角色分配</p>
+                      <p className="text-sm text-text-secondary mt-1">统一管理用户角色、状态和账户信息。</p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-10 gap-2">
                     <input
                       value={userKeyword}
                       onChange={(event) => setUserKeyword(event.target.value)}
@@ -511,18 +450,6 @@ export default function AdminUsers() {
                       <option value="ALL">全部角色</option>
                       <option value="SUPER_ADMIN">超级管理员</option>
                       <option value="USER">普通用户</option>
-                    </select>
-                    <select
-                      value={membershipFilter}
-                      onChange={(event) => {
-                        setMembershipFilter(event.target.value as 'ALL' | 'FREE' | 'VIP')
-                        setUserPage(1)
-                      }}
-                      className="h-9 px-3 rounded-lg border border-gray-200 text-sm xl:col-span-2 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
-                    >
-                      <option value="ALL">全部会员</option>
-                      <option value="FREE">FREE</option>
-                      <option value="VIP">VIP</option>
                     </select>
                     <select
                       value={statusFilter}
@@ -576,12 +503,12 @@ export default function AdminUsers() {
                     <table className="w-full table-fixed text-sm">
                       <thead>
                         <tr className="text-left text-text-secondary border-b border-gray-100">
-                          <th className="py-3 px-3 w-[24%]">用户</th>
-                          <th className="py-3 px-3 w-[12%]">角色</th>
-                          <th className="py-3 px-3 w-[16%]">会员</th>
-                          <th className="py-3 px-3 w-[12%]">状态</th>
+                          <th className="py-3 px-3 w-[28%]">用户</th>
+                          <th className="py-3 px-3 w-[14%]">角色</th>
+                          <th className="py-3 px-3 w-[14%]">状态</th>
+                          <th className="py-3 px-3 w-[14%]">下载数</th>
                           <th className="py-3 px-3 w-[14%]">注册时间</th>
-                          <th className="py-3 px-3 w-[22%]">操作</th>
+                          <th className="py-3 px-3 w-[16%]">操作</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -602,17 +529,14 @@ export default function AdminUsers() {
                         {!isLoadingUsers && users.map((item) => (
                           <tr key={item.id} className="border-b border-gray-50 align-top">
                             <td className="py-3 px-3">
-                              <p
-                                title={item.nickname || '--'}
-                                className="font-medium text-text-primary truncate"
-                              >
+                              <p title={item.nickname || '--'} className="font-medium text-text-primary truncate">
                                 {item.nickname || '--'}
                               </p>
-                              <p
-                                title={item.email}
-                                className="text-xs text-text-secondary truncate mt-0.5"
-                              >
+                              <p title={item.email} className="text-xs text-text-secondary truncate mt-0.5">
                                 {item.email}
+                              </p>
+                              <p className="text-xs text-text-secondary truncate mt-0.5">
+                                手机号：{item.phone || '--'}
                               </p>
                             </td>
                             <td className="py-3 px-3">
@@ -626,24 +550,15 @@ export default function AdminUsers() {
                             </td>
                             <td className="py-3 px-3">
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                item.membershipLevel === 'VIP'
-                                  ? 'bg-amber-100 text-amber-700'
-                                  : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {item.membershipLevel}
-                              </span>
-                              <p className="text-xs text-text-secondary mt-1 whitespace-nowrap truncate">
-                                到期：{formatDateOnly(item.vipExpireDate)}
-                              </p>
-                            </td>
-                            <td className="py-3 px-3">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                                 item.accountStatus === 'ACTIVE'
                                   ? 'bg-emerald-100 text-emerald-700'
                                   : 'bg-red-100 text-red-700'
                               }`}>
                                 {STATUS_LABEL_MAP[item.accountStatus]}
                               </span>
+                            </td>
+                            <td className="py-3 px-3 text-xs text-text-secondary">
+                              {item.downloadCount}
                             </td>
                             <td className="py-3 px-3 text-xs text-text-secondary">
                               {formatDateTime(item.createdAt)}
@@ -657,14 +572,6 @@ export default function AdminUsers() {
                                   className="px-2 py-1.5 rounded-md text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors disabled:opacity-60"
                                 >
                                   {item.role === 'SUPER_ADMIN' ? '设为普通用户' : '设为超级管理员'}
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={operatingUserId === item.id}
-                                  onClick={() => void handleToggleMembership(item)}
-                                  className="px-2 py-1.5 rounded-md text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-60"
-                                >
-                                  {item.membershipLevel === 'VIP' ? '设为 FREE' : '设为 VIP'}
                                 </button>
                                 <button
                                   type="button"
@@ -706,9 +613,9 @@ export default function AdminUsers() {
               {activeTab === 'audit' && (
                 <div className="bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-4 md:p-6">
                   <h1 className="text-xl font-semibold text-text-primary">操作审计</h1>
-                  <p className="text-sm text-text-secondary mt-1">记录后台每一步关键变更与登录态操作</p>
+                  <p className="text-sm text-text-secondary mt-1">记录后台关键变更与登录态操作。</p>
 
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-2">
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-10 gap-2">
                     <select
                       value={auditModuleFilter}
                       onChange={(event) => {
@@ -722,7 +629,6 @@ export default function AdminUsers() {
                       <option value="ROLE">角色分配</option>
                       <option value="AUTH">登录态管理</option>
                       <option value="DOWNLOAD_POLICY">下载模式管理</option>
-                      <option value="PAYMENT">支付订单</option>
                     </select>
                     <select
                       value={auditPlatformFilter}
@@ -749,11 +655,11 @@ export default function AdminUsers() {
                         setAuditPageSize(Number.parseInt(event.target.value, 10))
                         setAuditPage(1)
                       }}
-                      className="h-9 px-3 rounded-lg border border-gray-200 text-sm xl:col-span-2"
+                      className="h-9 px-3 rounded-lg border border-gray-200 text-sm xl:col-span-1"
                     >
                       {AUDIT_PAGE_SIZE_OPTIONS.map((item) => (
                         <option key={item} value={item}>
-                          每页 {item} 条
+                          {item}
                         </option>
                       ))}
                     </select>
@@ -763,7 +669,7 @@ export default function AdminUsers() {
                         setAuditPage(1)
                         void fetchAuditLogs()
                       }}
-                      className="h-9 px-3 rounded-lg text-sm bg-primary text-white hover:bg-primary/90 xl:col-span-2"
+                      className="h-9 px-3 rounded-lg text-sm bg-primary text-white hover:bg-primary/90 xl:col-span-1"
                     >
                       查询
                     </button>
@@ -834,7 +740,6 @@ export default function AdminUsers() {
 
               {activeTab === 'auth' && <AdminAuthManagement />}
               {activeTab === 'download-policy' && <DownloadModeManagement />}
-              {activeTab === 'orders' && <AdminOrderManagement />}
               {activeTab === 'runtime' && (
                 <Suspense
                   fallback={(

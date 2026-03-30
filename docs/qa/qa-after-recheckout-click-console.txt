@@ -1,9 +1,0 @@
-Total messages: 3 (Errors: 0, Warnings: 3)
-
-[WARNING] <link rel=preload> uses an unsupported `as` value @ https://checkout.stripe.com/c/pay/cs_test_a1drN9sSdOTDW48CSfIbTCjyfzFmxThMuLN30cU5iG1mQ1UO74DiMU1w0B#fidnandhYHdWcXxpYCc%2FJ2FgY2RwaXEnKSdkdWxOYHwnPyd1blpxYHZxWjA0UUZ2akpDRFV%2FMW50NU9DQUtKMl1BNG13Q0hsRGQxdTBUR0lPQkoya25sZjQ1R3ZzQTBWMVVWaVAxRlBKTWBSaFxhUDxTX3dJdH18YTxIUj1HRGhiXG5pNTVHUUF8YkpwPCcpJ2N3amhWYHdzYHcnP3F3cGApJ2dkZm5id2pwa2FGamlqdyc%2FJyZjY2NjY2MnKSdpZHxqcHFRfHVgJz8ndmxrYmlgWmxxYGgnKSdga2RnaWBVaWRmYG1qaWFgd3YnP3F3cGB4JSUl:0
-[WARNING] <link rel=preload> uses an unsupported `as` value @ https://checkout.stripe.com/c/pay/cs_test_a1drN9sSdOTDW48CSfIbTCjyfzFmxThMuLN30cU5iG1mQ1UO74DiMU1w0B#fidnandhYHdWcXxpYCc%2FJ2FgY2RwaXEnKSdkdWxOYHwnPyd1blpxYHZxWjA0UUZ2akpDRFV%2FMW50NU9DQUtKMl1BNG13Q0hsRGQxdTBUR0lPQkoya25sZjQ1R3ZzQTBWMVVWaVAxRlBKTWBSaFxhUDxTX3dJdH18YTxIUj1HRGhiXG5pNTVHUUF8YkpwPCcpJ2N3amhWYHdzYHcnP3F3cGApJ2dkZm5id2pwa2FGamlqdyc%2FJyZjY2NjY2MnKSdpZHxqcHFRfHVgJz8ndmxrYmlgWmxxYGgnKSdga2RnaWBVaWRmYG1qaWFgd3YnP3F3cGB4JSUl:0
-[WARNING] [Stripe.js] The following payment method types are not activated:
-
-- link
-
-They will be displayed in test mode, but hidden in live mode. Please activate the payment method types in your dashboard (https://dashboard.stripe.com/settings/payment_methods) and ensure your account is enabled for any preview features that you are trying to use. @ https://js.stripe.com/v3/fingerprinted/js/controller-2e1d4b564b9383d38bbad27d7f099996.js:0

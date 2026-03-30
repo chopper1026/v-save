@@ -8,12 +8,9 @@ export interface User {
   name: string
   email: string
   role?: 'SUPER_ADMIN' | 'USER'
-  membershipLevel?: 'FREE' | 'VIP'
   accountStatus?: 'ACTIVE' | 'DISABLED'
   phone?: string | null
   avatar?: string
-  isVip: boolean
-  vipExpireDate?: string | null
   downloadCount?: number
 }
 

@@ -1,5 +1,5 @@
 {
-  "name": "video-downloader-backend",
+  "name": "v-save-backend",
   "version": "1.0.0",
   "description": "V-SAVE Backend API",
   "author": "",
@@ -15,7 +15,7 @@
     "migrate:sqlite:mysql": "node scripts/migrate-sqlite-to-mysql.js",
     "regression:douyin": "node scripts/douyin-regression.js",
     "regression:bilibili:ios": "node scripts/ios-bilibili-regression.js",
-    "regression:bilibili:ios:batch": "node scripts/ios-bilibili-regression.js --batch --count 10 --qualities 720p,1080p --source popular --auto-vip",
+    "regression:bilibili:ios:batch": "node scripts/ios-bilibili-regression.js --batch --count 10 --qualities 720p,1080p --source popular",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -43,7 +43,6 @@
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
     "sqlite3": "^5.1.7",
-    "stripe": "^18.5.0",
     "typeorm": "^0.3.19",
     "user-agents": "^1.1.672"
   },

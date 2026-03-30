@@ -13,7 +13,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'video-downloader-secret-key',
+      secretOrKey: configService.get<string>('JWT_SECRET') || 'v-save-secret-key',
     });
   }
 
@@ -22,7 +22,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     email: string;
     role?: string;
     accountStatus?: string;
-    membershipLevel?: string;
   }) {
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
@@ -33,15 +32,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('账号已被禁用');
     }
 
-    const syncedUser = this.usersService.normalizeMembershipState(
-      await this.usersService.syncRoleByPolicy(user),
-    );
+    const syncedUser = await this.usersService.syncRoleByPolicy(user);
     return {
       id: syncedUser.id,
       email: syncedUser.email,
       role: syncedUser.role,
       accountStatus: syncedUser.accountStatus,
-      membershipLevel: syncedUser.membershipLevel,
     };
   }
 }

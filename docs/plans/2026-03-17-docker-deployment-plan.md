@@ -30,8 +30,8 @@ docker compose ps
 ```
 
 期望状态：
-- `video-downloader-backend`: healthy
-- `video-downloader-frontend`: healthy
+- `v-save-backend`: healthy
+- `v-save-frontend`: healthy
 
 ### 2.2 可选模式（Compose MySQL）
 

@@ -2,7 +2,7 @@ import { Injectable, ConflictException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { AccountStatus, MembershipLevel, User, UserRole } from './user.entity';
+import { User, UserRole } from './user.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -38,7 +38,6 @@ export class UsersService {
       password: hashedPassword,
       nickname,
       role: defaultRole,
-      membershipLevel: 'FREE',
       accountStatus: 'ACTIVE',
     });
 
@@ -70,82 +69,6 @@ export class UsersService {
 
   async validatePassword(user: User, password: string): Promise<boolean> {
     return bcrypt.compare(password, user.password);
-  }
-
-  async updateVIPStatus(
-    userId: string,
-    enableVip: boolean,
-    expireDate?: Date,
-  ): Promise<User | null> {
-    const user = await this.findById(userId);
-    if (!user) {
-      return null;
-    }
-
-    const beforeIsVip = user.membershipLevel === 'VIP';
-    const beforeExpireTime = user.vipExpireDate
-      ? new Date(user.vipExpireDate).getTime()
-      : 0;
-
-    user.membershipLevel = enableVip ? 'VIP' : 'FREE';
-    if (expireDate) {
-      user.vipExpireDate = expireDate;
-    } else if (!enableVip) {
-      user.vipExpireDate = null;
-    }
-
-    const saved = await this.usersRepository.save(user);
-
-    const afterExpireTime = saved.vipExpireDate
-      ? new Date(saved.vipExpireDate).getTime()
-      : 0;
-
-    if (!beforeIsVip && saved.membershipLevel === 'VIP') {
-      const dedupKey = `vip-activated:${saved.id}:${afterExpireTime || 'none'}`;
-      await this.notificationsService.createForUser(saved.id, {
-        type: 'VIP_ACTIVATED',
-        level: 'success',
-        source: 'vip',
-        title: '会员已开通',
-        content: '您的会员权益已生效，可下载更高画质并解锁更多能力。',
-        actionUrl: '/vip',
-        dedupKey,
-      });
-    } else if (
-      beforeIsVip &&
-      saved.membershipLevel === 'VIP' &&
-      afterExpireTime > beforeExpireTime &&
-      afterExpireTime > 0
-    ) {
-      const dedupKey = `vip-renewed:${saved.id}:${afterExpireTime}`;
-      await this.notificationsService.createForUser(saved.id, {
-        type: 'VIP_RENEWED',
-        level: 'success',
-        source: 'vip',
-        title: '会员续费成功',
-        content: `会员有效期已延长至 ${saved.vipExpireDate.toLocaleDateString('zh-CN')}。`,
-        actionUrl: '/vip',
-        dedupKey,
-      });
-    }
-
-    return saved;
-  }
-
-  normalizeMembershipState(user: User): User {
-    if (!user) {
-      return user;
-    }
-
-    const membership: MembershipLevel =
-      user.membershipLevel === 'VIP' ? 'VIP' : 'FREE';
-
-    if (user.membershipLevel === membership) {
-      return user;
-    }
-
-    user.membershipLevel = membership;
-    return user;
   }
 
   isUserDisabled(user: User | null | undefined): boolean {

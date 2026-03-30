@@ -69,7 +69,7 @@ async function main() {
 
   const sqlitePath = process.env.SQLITE_PATH
     ? path.resolve(backendRoot, process.env.SQLITE_PATH)
-    : path.join(backendRoot, 'video_downloader.db');
+    : path.join(backendRoot, 'v_save.db');
 
   if (!fs.existsSync(sqlitePath)) {
     throw new Error(`SQLite database not found: ${sqlitePath}`);
@@ -79,7 +79,7 @@ async function main() {
   const mysqlPort = Number(process.env.DATABASE_PORT || 3306);
   const mysqlUser = process.env.DATABASE_USER || 'root';
   const mysqlPassword = process.env.DATABASE_PASSWORD || '';
-  const mysqlDatabase = process.env.DATABASE_NAME || 'video_downloader';
+  const mysqlDatabase = process.env.DATABASE_NAME || 'v_save';
 
   console.log(`[migrate] sqlite=${sqlitePath}`);
   console.log(

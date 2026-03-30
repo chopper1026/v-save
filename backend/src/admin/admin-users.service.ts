@@ -8,13 +8,11 @@ import { Repository } from 'typeorm';
 import { NotificationLevel, NotificationsService } from '../notifications/notifications.service';
 import {
   AccountStatus,
-  MembershipLevel,
   User,
   UserRole,
 } from '../users/user.entity';
 import { QueryAdminAuditDto } from './dto/query-admin-audit.dto';
 import { QueryAdminUsersDto } from './dto/query-admin-users.dto';
-import { UpdateUserMembershipDto } from './dto/update-user-membership.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import {
@@ -29,11 +27,9 @@ export interface AdminUserView {
   email: string;
   nickname: string;
   role: UserRole;
-  membershipLevel: MembershipLevel;
   accountStatus: AccountStatus;
   phone: string | null;
   avatar: string | null;
-  vipExpireDate: Date | null;
   downloadCount: number;
   createdAt: Date;
   updatedAt: Date;
@@ -82,11 +78,6 @@ export class AdminUsersService {
 
     if (query.role) {
       qb.andWhere('user.role = :role', { role: query.role });
-    }
-    if (query.membershipLevel) {
-      qb.andWhere('user.membershipLevel = :membershipLevel', {
-        membershipLevel: query.membershipLevel,
-      });
     }
     if (query.accountStatus) {
       qb.andWhere('user.accountStatus = :accountStatus', {
@@ -207,60 +198,6 @@ export class AdminUsersService {
     return after;
   }
 
-  async updateMembership(
-    adminUserId: string,
-    targetUserId: string,
-    dto: UpdateUserMembershipDto,
-  ): Promise<AdminUserView> {
-    const admin = await this.mustGetUser(adminUserId);
-    const target = await this.mustGetUser(targetUserId);
-    const before = this.toAdminUserView(target);
-
-    const nextMembership = dto.membershipLevel;
-    target.membershipLevel = nextMembership;
-
-    if (nextMembership === 'FREE') {
-      target.vipExpireDate = null;
-    } else if (dto.vipExpireDate) {
-      const parsed = new Date(dto.vipExpireDate);
-      if (Number.isNaN(parsed.getTime())) {
-        throw new BadRequestException('vipExpireDate 格式不正确');
-      }
-      target.vipExpireDate = parsed;
-    }
-
-    const saved = await this.userRepository.save(target);
-    const after = this.toAdminUserView(saved);
-
-    await this.writeAuditLog(admin, saved, {
-      action: 'UPDATE_MEMBERSHIP',
-      module: 'USER',
-      platform: 'NONE',
-      targetType: 'USER',
-      beforeState: before,
-      afterState: after,
-      reason:
-        dto.reason ||
-        `会员由 ${before.membershipLevel} 调整为 ${after.membershipLevel}`,
-    });
-
-    const content =
-      after.membershipLevel === 'VIP'
-        ? `您的会员状态已更新为 VIP${after.vipExpireDate ? `（有效期至 ${after.vipExpireDate.toLocaleDateString('zh-CN')}）` : ''}。`
-        : '您的会员状态已更新为普通会员（FREE）。';
-    await this.notifyUser(
-      saved.id,
-      'MEMBERSHIP_UPDATED',
-      '会员状态已更新',
-      content,
-      'vip',
-      'success',
-      '/vip',
-    );
-
-    return after;
-  }
-
   async updateStatus(
     adminUserId: string,
     targetUserId: string,
@@ -332,18 +269,14 @@ export class AdminUsersService {
   }
 
   private toAdminUserView(user: User): AdminUserView {
-    const membershipLevel: MembershipLevel =
-      user.membershipLevel === 'VIP' ? 'VIP' : 'FREE';
     return {
       id: user.id,
       email: user.email,
       nickname: user.nickname,
       role: user.role || 'USER',
-      membershipLevel,
       accountStatus: user.accountStatus || 'ACTIVE',
       phone: user.phone || null,
       avatar: user.avatar || null,
-      vipExpireDate: user.vipExpireDate ? new Date(user.vipExpireDate) : null,
       downloadCount: Number(user.downloadCount || 0),
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -405,7 +338,7 @@ export class AdminUsersService {
     type: string,
     title: string,
     content: string,
-    source: 'auth' | 'vip' | 'account' | 'security' | 'system',
+    source: 'auth' | 'account' | 'security' | 'system',
     level: NotificationLevel,
     actionUrl: string,
   ): Promise<void> {

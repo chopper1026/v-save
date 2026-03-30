@@ -11,11 +11,9 @@ export interface ApiUser {
   email: string;
   nickname: string;
   role?: 'SUPER_ADMIN' | 'USER';
-  membershipLevel?: 'FREE' | 'VIP';
   accountStatus?: 'ACTIVE' | 'DISABLED';
   phone?: string | null;
   avatar?: string | null;
-  vipExpireDate?: string | null;
   downloadCount?: number;
 }
 
@@ -183,32 +181,13 @@ export interface NotificationUnreadCountResponse {
   };
 }
 
-export interface SubscriptionStatusSummary {
-  membershipLevel: 'FREE' | 'VIP';
-  vipExpireDate: string | null;
-  isLifetime: boolean;
-  benefits: {
-    supportedPlatforms: 'ALL' | string[];
-    maxQuality: string;
-    unlimitedDownloads: boolean;
-  };
-  quota: {
-    usedToday: number;
-    remainingToday: number | null;
-    dailyLimit: number | null;
-  };
-}
-
 export interface MobileUser {
   id: string;
   name: string;
   email: string;
   role: 'SUPER_ADMIN' | 'USER';
-  membershipLevel: 'FREE' | 'VIP';
   accountStatus: 'ACTIVE' | 'DISABLED';
   phone?: string | null;
   avatar?: string;
-  isVip: boolean;
-  vipExpireDate?: string | null;
   downloadCount?: number;
 }

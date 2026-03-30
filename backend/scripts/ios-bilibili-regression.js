@@ -89,8 +89,6 @@ function printHelp() {
   console.log('  --count <n>              Number of videos, default 10');
   console.log('  --qualities <a,b>        Qualities list, default 720p,1080p');
   console.log('  --source <popular>       Candidate source, default popular');
-  console.log('  --auto-vip               Auto activate VIP for generated account');
-  console.log('');
   console.log('Shared options:');
   console.log('  --api-base <url>         Backend API base, default http://127.0.0.1:3001/api');
   console.log('  --token <jwt>            Reuse existing jwt token');
@@ -265,18 +263,6 @@ async function ensureToken(apiBase, tokenFromArg, emailFromArg, passwordFromArg)
   throw new Error(
     `无法获取登录 token。register=${registerRes.status}, login=${loginRes.status}`,
   );
-}
-
-async function activateVip(apiBase, token) {
-  const res = await fetchJson(`${apiBase}/users/vip/activate`, {
-    method: 'PATCH',
-    headers: getAuthHeaders(token),
-    body: JSON.stringify({}),
-  });
-
-  if (!res.ok) {
-    throw new Error(`VIP 激活失败: status=${res.status}, body=${res.text}`);
-  }
 }
 
 function toMediaIdentity(value) {
@@ -790,20 +776,12 @@ async function main() {
 
   const apiBase = String(args['api-base'] || DEFAULT_API_BASE).replace(/\/$/, '');
   const isBatch = parseBooleanFlag(args.batch, false);
-  const autoVip = parseBooleanFlag(args['auto-vip'], false);
-
   const auth = await ensureToken(
     apiBase,
     args.token ? String(args.token).trim() : '',
     args.email ? String(args.email).trim() : '',
     args.password ? String(args.password).trim() : '',
   );
-
-  if (autoVip) {
-    console.log('Activating VIP for test account...');
-    await activateVip(apiBase, auth.token);
-    console.log('VIP activated.');
-  }
 
   if (!isBatch) {
     const sourceUrl = String(args.url || DEFAULT_URL).trim();
