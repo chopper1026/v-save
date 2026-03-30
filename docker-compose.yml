@@ -31,12 +31,17 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        APT_MIRROR: ${APT_MIRROR:-}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     container_name: v-save-backend
     env_file:
       - ./backend/.env
     restart: always
     ports:
-      - "3001:3001"
+      - "${BACKEND_PORT:-3001}:3001"
     environment:
       DATABASE_TYPE: mysql
       DATABASE_HOST: ${DATABASE_HOST:-host.docker.internal}
@@ -80,10 +85,12 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-}
     container_name: v-save-frontend
     restart: always
     ports:
-      - "4871:80"
+      - "${FRONTEND_PORT:-4871}:80"
     environment:
       TZ: ${TZ:-Asia/Shanghai}
     depends_on:
