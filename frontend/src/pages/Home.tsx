@@ -950,7 +950,7 @@ export default function Home() {
       <footer className="border-t border-sky-100/90 bg-gradient-to-b from-white/60 to-sky-50/80">
         <div className="max-w-[1200px] mx-auto px-4 py-6">
           <p className="text-sm text-slate-500 text-center">
-            V-SAVE &copy; {currentYear} chopper1026. All rights reserved.
+            V-SAVE &copy; {currentYear}. All rights reserved.
           </p>
         </div>
       </footer>

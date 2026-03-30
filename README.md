@@ -1,53 +1,63 @@
 # V-SAVE
 
-多平台视频解析、预览、下载工具。
+多平台视频解析、预览、下载与登录态管理工具，包含 Web 用户端、后台管理、Mobile App，以及用于抖音扫码登录桥接的 macOS Companion。
 
-- 统一后端 API，覆盖 **Web 用户端 + 管理后台 + Mobile App**
-- 提供 **macOS Companion** 作为抖音管理员登录桥接（本机 Chrome 扫码 -> 服务端共享会话）
+## 功能特性
 
-## 项目状态（2026-03-24）
+- 统一后端 API，覆盖 Web、管理后台、Mobile 三个客户端。
+- 支持多平台解析、预览、下载任务创建、文件回取与合并下载。
+- 提供 B 站与抖音登录态管理，抖音支持 Companion 扫码桥接。
+- 内置通知中心、下载模式管理、运行态埋点与 Runtime 看板。
+- 提供一键部署脚本，适合服务器快速拉起 `frontend + backend + mysql`。
 
-当前阶段：`Web Beta 可用 + Mobile v1 稳定性持续优化`
+## 项目结构
 
-- 已完成：Web/Mobile 主链路、后台治理、通知中心、下载模式管理、Runtime 运行看板、Douyin Companion Bridge 基础设施
-- 进行中：Web/Mobile E2E 自动化、Runtime 失败态精度补齐、Companion 实机扫码回归
-- 强约束：任何 API 字段、错误码、默认值改动都要同步验证 **Web + Mobile**
+| 目录 | 说明 |
+| --- | --- |
+| `backend/` | NestJS 后端，负责认证、解析、下载、通知、后台治理、Runtime 监控 |
+| `frontend/` | Vite + React Web 用户端与管理后台 |
+| `mobile/` | Expo + React Native 移动端 |
+| `companion/` | macOS 本机登录桥接工具，负责拉起 Chrome 完成抖音扫码 |
+| `scripts/` | 部署与运维脚本 |
 
-## 核心能力
+## 技术栈
 
-### 下载主链路
+- Backend: NestJS、TypeORM、MySQL、Axios、Puppeteer Core
+- Frontend: Vite、React、Tailwind CSS、Zustand、Vitest
+- Mobile: Expo、React Native、expo-router、SecureStore
+- Companion: SwiftUI / AppKit、Chrome DevTools Protocol
 
-`parse -> preview -> get-url/create-task -> file/merge`
+## 部署方式
 
-关键接口：
+### 方式一：一键部署（推荐）
 
-- `POST /api/download/parse`
-- `POST /api/download/get-url`（必须传 `clientType=WEB|MOBILE`）
-- `POST /api/download/create-task`
-- `GET /api/download/tasks/:id`
-- `GET /api/download/tasks/:id/file`
-- `GET /api/download/merge`
+适合服务器直接部署完整服务栈：
 
-### 抖音当前口径
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh)
+```
 
-- 解析依赖服务端会话（无匿名主路径）
-- 官方详情链路：`msToken + a_bogus + aweme/detail`
-- 无有效会话直接返回：`DOUYIN_SESSION_REQUIRED`
-- 登录态管理主方案：`Companion App -> 本机 Chrome -> /api/douyin/auth/bridge/* -> 服务端 Cookie 入库`
+常用参数：
 
-## 仓库结构
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --public-host your.domain.com
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --install-dir /opt/v-save
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --force-region cn
+```
 
-| 目录 | 说明 | 技术栈 |
-| --- | --- | --- |
-| `backend/` | 认证、解析、下载、通知、后台治理、Runtime 监控 | NestJS + TypeORM + MySQL |
-| `frontend/` | Web 用户端与管理后台 | Vite + React + Tailwind + Zustand |
-| `mobile/` | 移动端主链路（iOS 优先） | Expo + React Native + expo-router + Zustand |
-| `companion/` | macOS 本机登录桥接工具 | SwiftUI/AppKit + Chrome CDP |
-| `docs/plans/` | 当前事实文档、历史设计与运维口径 | Markdown |
+脚本会自动完成：
 
-## 快速开始（源码开发）
+- 检测架构并选择合适的 Docker 镜像。
+- 在中国大陆网络环境下自动启用镜像加速。
+- 检查 Docker / Docker Compose。
+- 生成随机数据库密码与 `JWT_SECRET`。
+- 写入部署目录下的 `.env` 与 `backend/.env`。
+- 拉起 `frontend + backend + mysql`。
+- 输出访问地址、数据库用户名和随机生成的数据库密码。
 
-### 1) 安装依赖
+### 方式二：源码开发
+
+#### 1. 安装依赖
 
 ```bash
 cd backend && npm install
@@ -56,22 +66,31 @@ cd ../mobile && npm install --legacy-peer-deps
 cd ../companion && npm install
 ```
 
-### 2) 启动 Backend + Frontend
+#### 2. 启动后端
 
 ```bash
 cd backend
-npm run start:dev
+cp .env.example .env
+```
 
-cd ../frontend
+把 `backend/.env` 中的 `JWT_SECRET` 改成至少 24 位随机字符串，再启动：
+
+```bash
+npm run start:dev
+```
+
+后端默认地址：`http://localhost:3001/api`
+
+#### 3. 启动 Web
+
+```bash
+cd frontend
 npm run dev
 ```
 
-默认地址：
+Web 默认地址：`http://localhost:3000`
 
-- Backend: `http://localhost:3001/api`
-- Frontend: `http://localhost:3000`
-
-### 3) 启动 Mobile（Expo dev client）
+#### 4. 启动 Mobile
 
 ```bash
 cd mobile
@@ -82,9 +101,12 @@ npm run ios
 # 或 npm run android
 ```
 
-> Mobile 联调时，`EXPO_PUBLIC_API_BASE_URL` 需要指向手机可访问的后端地址（不要用 `localhost`）。
+注意：
 
-### 4) 启动 Companion（抖音扫码桥）
+- `EXPO_PUBLIC_API_BASE_URL` 必须指向手机能访问的后端地址。
+- 真机调试不要使用 `localhost`，请改成 `http://<LAN-IP>:3001/api`。
+
+#### 5. 启动 Companion
 
 ```bash
 cd companion
@@ -92,82 +114,59 @@ npm run generate:xcodeproj
 npm run dev
 ```
 
-## Docker 本地联调
+Companion 默认仅监听本机：`http://127.0.0.1:37219`
 
-默认编排：`backend + frontend`（mobile 不在 compose 内）
+### 方式三：Docker Compose 本地联调
+
+适合本机调试 Web + Backend：
+
+```bash
+cp backend/.env.docker.example backend/.env
+```
+
+然后至少完成两项配置：
+
+1. 把 `backend/.env` 里的 `JWT_SECRET` 改成真实随机值。
+2. 按你的数据库环境修改 `DATABASE_HOST / DATABASE_USER / DATABASE_PASSWORD`。
+
+如果你只是想拉起前后端容器：
 
 ```bash
 docker compose up -d --build
 docker compose ps
 ```
 
-可选启用内置 MySQL：
+如果你要连同 MySQL 一起拉起，推荐直接使用上面的一键部署脚本，因为它会自动生成并对齐根目录 `.env`、`backend/.env`、MySQL 账号和后端连接配置，避免手工配置不一致。
 
-```bash
-docker compose --profile with-mysql up -d --build
-```
+## 关键环境变量
 
-默认访问：
+### Backend
 
-- Web: `http://localhost:4871`
-- Backend（给 Mobile）: `http://<LAN-IP>:3001/api`
+- `JWT_SECRET`
+  必填，必须使用强随机值。当前版本会拒绝公开默认值或占位值启动。
+- `DATABASE_HOST`
+- `DATABASE_PORT`
+- `DATABASE_USER`
+- `DATABASE_PASSWORD`
+- `DATABASE_NAME`
+- `CORS_ORIGINS`
+- `PUBLIC_API_ORIGIN`
+- `WEB_PUBLIC_ORIGIN`
 
-## 一键部署（前后端 + MySQL）
+参考文件：
 
-可直接在服务器执行：
+- `backend/.env.example`
+- `backend/.env.docker.example`
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh)
-```
+### Mobile
 
-脚本特性：
+- `EXPO_PUBLIC_API_BASE_URL`
 
-- 全部使用 Docker 部署：`frontend + backend + mysql`
-- 自动识别 `amd64 / arm64 / armv7` 等常见架构
-- 自动探测中国大陆网络并启用 Docker / npm / pip / 系统包镜像加速
-- 自动检测 Docker / Docker Compose，缺失时会中文提示是否安装
-- 自动生成强密码并写入部署目录下的 `.env` 与 `backend/.env`
-- 部署完成后会在终端用中文展示访问地址、数据库用户名和密码
-- 若当前数据库为空，第一个注册用户会自动设置为超级管理员
+参考文件：
 
-## API 概览
+- `mobile/.env.example`
 
-### 认证
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-
-### 用户（需登录）
-
-- `GET /api/users/profile`
-- `PATCH /api/users/profile`
-- `PATCH /api/users/account/password`
-- `PATCH /api/users/account/phone`
-
-### Runtime 事件（端侧）
-
-- `POST /api/runtime/client-events`（`feature=parse|preview|download`）
-
-### 抖音登录态管理（仅超级管理员）
-
-- 状态/手动维护：
-  - `GET /api/douyin/auth/status`
-  - `POST /api/douyin/auth/session`
-  - `DELETE /api/douyin/auth/session`
-- Companion Bridge：
-  - `POST /api/douyin/auth/bridge/start`
-  - `GET /api/douyin/auth/bridge/status`
-  - `POST /api/douyin/auth/bridge/complete`
-
-## 双端开发约束（必须遵守）
-
-1. Web 与 Mobile 共用 API，字段/错误码/默认值变更必须双端联测。
-2. `POST /api/download/get-url` 双端必须显式传 `clientType=WEB|MOBILE`。
-3. `runtimeTraceId` 与 `x-runtime-trace-id` 改动必须双端 + 后端同步验证。
-4. 抖音链路不引入匿名降级主路径，必须正确处理 `DOUYIN_SESSION_REQUIRED`。
-5. 登录态、通知态、下载态改动需提交双端联测证据。
-
-## 测试与质量命令
+## 常用命令
 
 ### Backend
 
@@ -201,14 +200,55 @@ cd companion
 npm test
 ```
 
-## 文档导航
+### 部署脚本自检
 
-- 文档索引：`docs/plans/README.md`
-- 当前状态快照：`docs/plans/2026-03-24-development-status.md`
-- 当前架构摘要：`docs/plans/2026-03-24-project-architecture-summary.md`
-- Docker 联调指南：`docs/plans/2026-03-24-docker-deployment-guide.md`
-- 双端开发检查清单：`docs/plans/2026-03-16-dual-platform-development-checklist.md`
-- Mobile 专项说明：`mobile/README.md`
+```bash
+bash scripts/deploy.test.sh
+```
+
+## API 简览
+
+### 认证
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+
+### 下载主链路
+
+- `POST /api/download/parse`
+- `POST /api/download/get-url`
+- `POST /api/download/create-task`
+- `GET /api/download/tasks/:id`
+- `GET /api/download/tasks/:id/file`
+- `GET /api/download/merge`
+
+### 用户
+
+- `GET /api/users/profile`
+- `PATCH /api/users/profile`
+- `PATCH /api/users/account/password`
+- `PATCH /api/users/account/phone`
+
+### 抖音登录态管理（仅超级管理员）
+
+- `GET /api/douyin/auth/status`
+- `POST /api/douyin/auth/session`
+- `DELETE /api/douyin/auth/session`
+- `POST /api/douyin/auth/bridge/start`
+- `GET /api/douyin/auth/bridge/status`
+- `POST /api/douyin/auth/bridge/complete`
+
+## 安全说明
+
+- 仓库不包含已跟踪的真实 `.env`、私钥或第三方服务密钥。
+- Web 端登录态只保存在 `sessionStorage`，不会再把明文密码写入浏览器持久存储。
+- 抖音登录态管理页不再显示 Cookie 片段。
+- 部署脚本会生成随机密钥；数据库密码会在当前部署终端摘要里显示一次，`JWT_SECRET` 仅写入配置文件。
+
+## 其他说明
+
+- Mobile 详细说明见 `mobile/README.md`
+- Companion 详细说明见 `companion/README.md`
 
 ## License
 

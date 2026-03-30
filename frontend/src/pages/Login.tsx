@@ -5,8 +5,13 @@ import axios from 'axios'
 import { useUserStore } from '../store/useUserStore'
 import { api, mapApiUserToStoreUser, type AuthResponse } from '../lib/api'
 import AuthLayout from '../components/AuthLayout'
-
-const REMEMBER_PASSWORD_STORAGE_KEY = 'remembered-login-credentials'
+import {
+  clearLegacyRememberedPassword,
+  clearRememberedLoginPreference,
+  loadRememberedLoginPreference,
+  saveRememberedLoginPreference,
+  storeBrowserCredential,
+} from '../lib/remember-password'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -31,22 +36,11 @@ export default function Login() {
       return
     }
 
-    const raw = localStorage.getItem(REMEMBER_PASSWORD_STORAGE_KEY)
-    if (!raw) {
-      return
-    }
+    clearLegacyRememberedPassword()
 
-    try {
-      const parsed = JSON.parse(raw) as {
-        email?: string
-        password?: string
-      }
-      setEmail(typeof parsed.email === 'string' ? parsed.email : '')
-      setPassword(typeof parsed.password === 'string' ? parsed.password : '')
-      setRememberPassword(true)
-    } catch {
-      localStorage.removeItem(REMEMBER_PASSWORD_STORAGE_KEY)
-    }
+    const preference = loadRememberedLoginPreference()
+    setRememberPassword(preference.rememberPassword)
+    setEmail(preference.email)
   }, [isHydrated])
 
   if (!isHydrated || isLoggedIn) {
@@ -65,17 +59,25 @@ export default function Login() {
       })
 
       const { access_token, user } = response.data
+      const normalizedEmail = email.trim()
+
       if (rememberPassword) {
-        localStorage.setItem(
-          REMEMBER_PASSWORD_STORAGE_KEY,
-          JSON.stringify({
-            email: email.trim(),
+        saveRememberedLoginPreference({
+          rememberPassword: true,
+          email: normalizedEmail,
+        })
+        try {
+          await storeBrowserCredential({
+            email: normalizedEmail,
             password,
           })
-        )
+        } catch {
+          // Browser credential storage is best-effort and should not block login.
+        }
       } else {
-        localStorage.removeItem(REMEMBER_PASSWORD_STORAGE_KEY)
+        clearRememberedLoginPreference()
       }
+
       login(mapApiUserToStoreUser(user), access_token)
       navigate('/')
     } catch (err) {
@@ -109,16 +111,18 @@ export default function Login() {
       <h1 className="text-2xl font-extrabold text-slate-900 text-center mb-2">登录账号</h1>
       <p className="text-slate-500 text-center mb-7">请输入邮箱和密码继续</p>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5" autoComplete={rememberPassword ? 'on' : 'off'}>
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-2">邮箱</label>
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
+              name="username"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="请输入邮箱"
+              autoComplete={rememberPassword ? 'username' : 'off'}
               className="w-full h-12 pl-12 pr-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 focus:bg-white transition-all outline-none"
               required
             />
@@ -130,10 +134,12 @@ export default function Login() {
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
+              name="password"
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="请输入密码"
+              autoComplete={rememberPassword ? 'current-password' : 'off'}
               className="w-full h-12 pl-12 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 focus:bg-white transition-all outline-none"
               required
             />
@@ -150,9 +156,14 @@ export default function Login() {
 
         {error && <p className="text-rose-500 text-sm text-center">{error}</p>}
 
-        <label className="inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-700 hover:border-sky-300 hover:bg-sky-50/70 cursor-pointer transition-colors">
+        <label
+          htmlFor="remember-password"
+          className="inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm text-slate-700 hover:border-sky-300 hover:bg-sky-50/70 cursor-pointer transition-colors"
+        >
           <span className="relative inline-flex h-5 w-5 items-center justify-center">
             <input
+              id="remember-password"
+              aria-label="记住密码"
               type="checkbox"
               checked={rememberPassword}
               onChange={(e) => setRememberPassword(e.target.checked)}

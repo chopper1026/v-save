@@ -1,7 +1,39 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 const TOKEN_STORAGE_KEY = 'token'
+const STORE_STORAGE_KEY = 'user-storage'
+
+const clearLegacyAuthStorage = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+    window.localStorage.removeItem(STORE_STORAGE_KEY)
+  } catch {
+    // Ignore storage cleanup failures in restricted browser contexts.
+  }
+}
+
+const syncSessionToken = (token: string | null) => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    if (token) {
+      window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token)
+    } else {
+      window.sessionStorage.removeItem(TOKEN_STORAGE_KEY)
+    }
+  } catch {
+    // Ignore storage sync failures in restricted browser contexts.
+  }
+}
+
+clearLegacyAuthStorage()
 
 export interface User {
   id: string
@@ -36,16 +68,14 @@ export const useUserStore = create<UserState>()(
       isHydrated: false,
 
       login: (user: User, token: string) => {
-        localStorage.setItem(TOKEN_STORAGE_KEY, token)
+        clearLegacyAuthStorage()
+        syncSessionToken(token)
         set({ user, token, isLoggedIn: true })
       },
 
       setToken: (token: string | null) => {
-        if (token) {
-          localStorage.setItem(TOKEN_STORAGE_KEY, token)
-        } else {
-          localStorage.removeItem(TOKEN_STORAGE_KEY)
-        }
+        clearLegacyAuthStorage()
+        syncSessionToken(token)
         set({ token, isLoggedIn: !!token })
       },
 
@@ -54,12 +84,14 @@ export const useUserStore = create<UserState>()(
       },
 
       logout: () => {
-        localStorage.removeItem(TOKEN_STORAGE_KEY)
+        clearLegacyAuthStorage()
+        syncSessionToken(null)
         set({ user: null, token: null, isLoggedIn: false })
       },
 
       forceLogout: () => {
-        localStorage.removeItem(TOKEN_STORAGE_KEY)
+        clearLegacyAuthStorage()
+        syncSessionToken(null)
         set({ user: null, token: null, isLoggedIn: false })
       },
 
@@ -70,7 +102,8 @@ export const useUserStore = create<UserState>()(
       },
     }),
     {
-      name: 'user-storage',
+      name: STORE_STORAGE_KEY,
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         user: state.user,
         token: state.token,
@@ -80,11 +113,8 @@ export const useUserStore = create<UserState>()(
         if (!state) {
           return
         }
-        if (state.token) {
-          localStorage.setItem(TOKEN_STORAGE_KEY, state.token)
-        } else {
-          localStorage.removeItem(TOKEN_STORAGE_KEY)
-        }
+        clearLegacyAuthStorage()
+        syncSessionToken(state.token)
         state.setHydrated(true)
       },
     }

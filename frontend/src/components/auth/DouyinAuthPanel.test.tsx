@@ -89,7 +89,8 @@ describe('DouyinAuthPanel', () => {
     expect(html).toContain('登录成功，抖音 Cookie 已保存')
     expect(html).toContain('扫码登录抖音')
     expect(html).toContain('数据库（扫码或手动维护）')
-    expect(html).toContain('sessionid=abcd...')
+    expect(html).not.toContain('Cookie 摘要')
+    expect(html).not.toContain('sessionid=abcd...')
   })
 
 })

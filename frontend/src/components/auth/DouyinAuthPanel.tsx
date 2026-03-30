@@ -97,7 +97,6 @@ export default function DouyinAuthPanel({
       infoItems={[
         { label: '来源', value: sourceLabel },
         { label: '最近检查时间', value: formatDateTime(status?.lastCheckAt || null) },
-        { label: 'Cookie 摘要', value: status?.cookiePreview || '--', wide: true },
       ]}
       actions={(
         <>

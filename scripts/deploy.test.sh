@@ -50,6 +50,26 @@ main() {
     exit 1
   fi
 
+  PROJECT_NAME="V-SAVE"
+  WEB_PUBLIC_ORIGIN="http://demo.example.com"
+  PUBLIC_API_ORIGIN="http://demo.example.com/api"
+  MYSQL_PORT="3306"
+  MYSQL_DATABASE="v_save"
+  MYSQL_USER="vsave_user"
+  MYSQL_PASSWORD="app-secret"
+  MYSQL_ROOT_PASSWORD="root-secret"
+  REPO_DIR="/tmp/v-save"
+  query_user_count() {
+    printf '0\n'
+  }
+
+  local summary
+  summary="$(show_summary)"
+  assert_contains "$summary" "前端访问地址：http://demo.example.com" "部署摘要应保留访问地址"
+  assert_contains "$summary" "配置文件位置：/tmp/v-save/.env" "部署摘要应保留配置文件位置"
+  assert_contains "$summary" "数据库密码：app-secret" "部署摘要应显示应用数据库密码"
+  assert_contains "$summary" "数据库 Root 密码：root-secret" "部署摘要应显示 Root 密码"
+
   printf 'deploy.sh 测试通过。\n'
 }
 
