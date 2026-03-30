@@ -22,10 +22,6 @@ export class QueryAdminUsersDto {
   role?: 'SUPER_ADMIN' | 'USER';
 
   @IsOptional()
-  @IsIn(['FREE', 'VIP'])
-  membershipLevel?: 'FREE' | 'VIP';
-
-  @IsOptional()
   @IsIn(['ACTIVE', 'DISABLED'])
   accountStatus?: 'ACTIVE' | 'DISABLED';
 }

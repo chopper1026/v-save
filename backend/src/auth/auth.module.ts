@@ -14,7 +14,7 @@ import { UsersModule } from '../users/users.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'video-downloader-secret-key',
+        secret: configService.get<string>('JWT_SECRET') || 'v-save-secret-key',
         signOptions: { expiresIn: '7d' },
       }),
       inject: [ConfigService],

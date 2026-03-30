@@ -7,7 +7,6 @@ import {
 } from 'typeorm';
 
 export type UserRole = 'SUPER_ADMIN' | 'USER';
-export type MembershipLevel = 'FREE' | 'VIP';
 export type AccountStatus = 'ACTIVE' | 'DISABLED';
 
 @Entity('users')
@@ -27,9 +26,6 @@ export class User {
   @Column({ type: 'varchar', length: 32, default: 'USER' })
   role: UserRole;
 
-  @Column({ type: 'varchar', length: 16, default: 'FREE' })
-  membershipLevel: MembershipLevel;
-
   @Column({ type: 'varchar', length: 16, default: 'ACTIVE' })
   accountStatus: AccountStatus;
 
@@ -38,9 +34,6 @@ export class User {
 
   @Column({ unique: true, nullable: true })
   phone: string | null;
-
-  @Column({ nullable: true })
-  vipExpireDate: Date | null;
 
   @Column({ default: 0 })
   downloadCount: number;

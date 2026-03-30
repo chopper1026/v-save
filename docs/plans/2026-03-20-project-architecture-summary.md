@@ -31,7 +31,7 @@
 后端核心模块集中在 `backend/src/`：
 
 - `auth/`：登录、注册、JWT、角色守卫
-- `users/`：资料、手机号、密码、会员状态
+- `users/`：资料、手机号、密码、账号状态
 - `download/`：解析后下载主链路、任务、历史、权限校验
 - `parsers/`：抖音、B站、小红书、快手、YouTube 解析器
 - `proxy/`：媒体代理转发、上游兜底
@@ -51,7 +51,6 @@ Web 核心入口在 `frontend/src/App.tsx`：
 - `/`：首页解析与下载
 - `/login`、`/register`
 - `/user`
-- `/vip`
 - `/admin`
 
 当前后台管理页签顺序与默认行为：
@@ -100,7 +99,7 @@ Web 当前主要复用组件包括：
   - `GET /api/download/tasks/:id/file`
   - `GET /api/download/merge`
 - 下载历史：查询、单删、批量删、条件清空
-- 用户体系：登录/注册、资料编辑、密码修改、绑定手机号、会员状态
+- 用户体系：登录/注册、资料编辑、密码修改、绑定手机号、账号状态
 - 通知中心：列表、单条已读、全部已读、一键清空、登录态异常通知去重
 - 平台登录态管理：B站扫码、抖音扫码/手动 Cookie、健康检查
 - 后台治理：用户管理、审计、下载模式管理
@@ -231,4 +230,4 @@ Web 当前主要复用组件包括：
 4. `docs/plans/2026-03-16-dual-platform-development-checklist.md`
 5. `mobile/README.md`
 
-历史 `development-status`、`docker-deployment-plan` 与 `video-downloader-ui/design/*` 仅用于回溯，不作为当前实现事实。
+历史 `development-status`、`docker-deployment-plan` 与 `v-save-ui/design/*` 仅用于回溯，不作为当前实现事实。

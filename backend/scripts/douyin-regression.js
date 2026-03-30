@@ -251,19 +251,6 @@ async function loginUser(apiBase, email, password, timeoutMs) {
   );
 }
 
-async function activateVip(apiBase, token, timeoutMs) {
-  return fetchJson(
-    `${apiBase}/users/vip/activate`,
-    {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-    timeoutMs,
-  );
-}
-
 async function parseVideoWithRetry(apiBase, input, timeoutMs, maxAttempts = 3) {
   let lastResponse = null;
 
@@ -585,12 +572,6 @@ async function main() {
 
   if (!token) {
     throw new Error('failed to get auth token from register/login');
-  }
-
-  const vipResponse = await activateVip(apiBase, token, timeoutMs);
-  report.auth.vipStatus = vipResponse.status;
-  if (!okStatus(vipResponse.status)) {
-    throw new Error(`vip activate failed: ${vipResponse.status}`);
   }
 
   for (const caseDef of POSITIVE_CASES) {

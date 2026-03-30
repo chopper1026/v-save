@@ -44,7 +44,7 @@
 
 ### 3.2 会员维度（业务属性）
 
-1. `membershipLevel: FREE | VIP`
+1. `legacyAccessLevel: FREE | VIP`
 2. 会员不是管理角色，不参与后台访问控制
 
 ### 3.3 账号状态
@@ -63,11 +63,11 @@
 ### 4.1 `users` 字段
 
 1. `role: SUPER_ADMIN | USER`
-2. `membershipLevel: FREE | VIP`
+2. `legacyAccessLevel: FREE | VIP`
 3. `accountStatus: ACTIVE | DISABLED`
-4. `vipExpireDate` 保留用于会员有效期
+4. `legacyAccessExpireAt` 保留用于原访问等级有效期
 
-说明：`isVIP` 字段已下线，历史数据已迁移到 `membershipLevel`。
+说明：旧布尔访问等级字段已下线，历史数据已迁移到等级字段。
 
 ### 4.2 审计表 `user_admin_audit_logs`
 

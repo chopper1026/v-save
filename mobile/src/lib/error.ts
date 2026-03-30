@@ -1,7 +1,54 @@
+const isLocalhostLike = (value: string): boolean => {
+  try {
+    const parsed = new URL(String(value || '').trim());
+    return ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+};
+
+const resolveNetworkErrorMessage = (
+  error: any,
+  apiBaseUrl: string,
+): string | null => {
+  const message = String(error?.message || '').trim();
+  const code = String(error?.code || '').trim().toUpperCase();
+  const hasResponse = Boolean(error?.response);
+  if (hasResponse) {
+    return null;
+  }
+
+  const isNetworkFailure =
+    message === 'Network Error'
+    || code === 'ERR_NETWORK'
+    || code === 'ECONNABORTED';
+  if (!isNetworkFailure) {
+    return null;
+  }
+
+  const normalizedApiBaseUrl = String(apiBaseUrl || '').trim();
+  if (isLocalhostLike(normalizedApiBaseUrl)) {
+    return `无法连接到后端：当前 API 地址为 ${normalizedApiBaseUrl}。iOS 真机不能访问 localhost，请改成 http://<局域网IP>:3001/api 并重启 App。`;
+  }
+
+  return `无法连接到后端：请确认 ${normalizedApiBaseUrl || 'API 地址'} 可从当前设备访问，并确保后端服务已启动。`;
+};
+
 export const extractApiErrorMessage = (
   error: any,
-  fallback = '请求失败，请稍后重试'
+  fallback = '请求失败，请稍后重试',
+  options?: {
+    apiBaseUrl?: string;
+  }
 ): string => {
+  const networkMessage = resolveNetworkErrorMessage(
+    error,
+    options?.apiBaseUrl || '',
+  );
+  if (networkMessage) {
+    return networkMessage;
+  }
+
   const payload = error?.response?.data;
   const message = payload?.message;
 

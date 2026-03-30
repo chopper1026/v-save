@@ -42,9 +42,6 @@ export class DownloadHistory {
   @Column({ default: 'pending' })
   status: string;
 
-  @Column({ type: 'boolean', default: true })
-  countsTowardQuota: boolean;
-
   @Column({ type: 'datetime', nullable: true })
   hiddenAt: Date | null;
 

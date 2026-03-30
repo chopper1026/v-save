@@ -51,18 +51,14 @@ api.interceptors.response.use(
 );
 
 export const mapApiUserToMobileUser = (user: ApiUser): MobileUser => {
-  const membershipLevel = user.membershipLevel || 'FREE';
   return {
     id: user.id,
     name: user.nickname || user.email.split('@')[0],
     email: user.email,
     role: user.role || 'USER',
-    membershipLevel,
     accountStatus: user.accountStatus || 'ACTIVE',
     phone: user.phone || null,
     avatar: user.avatar || undefined,
-    isVip: membershipLevel === 'VIP',
-    vipExpireDate: user.vipExpireDate || null,
     downloadCount: user.downloadCount ?? 0,
   };
 };

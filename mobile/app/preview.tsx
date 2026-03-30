@@ -101,44 +101,9 @@ const isIosPhotos3301Message = (error: any): boolean => {
   );
 };
 
-const MEMBERSHIP_RESTRICTION_MESSAGE_MAP: Record<string, string> = {
-  FREE_LIMIT_REACHED: '今日下载次数已用完，升级 VIP 可继续下载。',
-  QUALITY_LIMIT_FOR_FREE: '免费用户最高支持 720P，请切换清晰度或升级 VIP。',
-  FREE_PLATFORM_NOT_SUPPORTED: '免费用户当前仅支持抖音和哔哩哔哩，请升级 VIP 解锁全平台。',
-};
-
-const MEMBERSHIP_RESTRICTION_TITLE_MAP: Record<string, string> = {
-  FREE_LIMIT_REACHED: '今日额度已用完',
-  QUALITY_LIMIT_FOR_FREE: '当前画质受限',
-  FREE_PLATFORM_NOT_SUPPORTED: '当前平台受限',
-};
-
-const isMembershipRestrictionCode = (code: string): boolean => Boolean(MEMBERSHIP_RESTRICTION_MESSAGE_MAP[code]);
-
-const goToAccountWithRestriction = (
-  router: ReturnType<typeof useRouter>,
-  code: string,
-  message: string,
-) => {
-  const title = MEMBERSHIP_RESTRICTION_TITLE_MAP[code] || '会员权益受限';
-  showInAppTopToast({
-    title,
-    message,
-    level: 'warn',
-  });
-  Alert.alert(title, message, [
-    { text: '取消', style: 'cancel' },
-    {
-      text: '查看会员权益',
-      onPress: () => router.push('/(tabs)/account'),
-    },
-  ]);
-};
-
 const DOWNLOAD_ERROR_MESSAGE_MAP: Record<string, string> = {
   [DOUYIN_WATERMARK_FALLBACK_REQUIRED_CODE]:
     '当前仅检测到带水印线路，请确认后继续下载。',
-  ...MEMBERSHIP_RESTRICTION_MESSAGE_MAP,
   DOWNLOAD_TIMEOUT: '下载超时，请稍后重试。',
   TASK_FILE_NOT_FOUND: '下载文件已失效，请重新发起下载。',
   IOS_PHOTOS_INCOMPATIBLE_CODEC: '当前视频编码与 iOS 相册不兼容，请更换视频后重试。',
@@ -613,13 +578,8 @@ export default function PreviewScreen() {
           'DOWNLOAD_FAILED'
         )
       );
-      const restrictionCode = String(extractApiErrorCode(err) || '').trim().toUpperCase();
       const friendlyMessage = resolveFriendlyDownloadMessage(err);
       setError(friendlyMessage);
-      if (isMembershipRestrictionCode(restrictionCode)) {
-        goToAccountWithRestriction(router, restrictionCode, friendlyMessage);
-        return;
-      }
       showInAppTopToast({
         title: '下载失败',
         message: friendlyMessage,

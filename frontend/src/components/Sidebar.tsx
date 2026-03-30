@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { User, Download, Crown, Settings, Bell, LogOut, ReceiptText } from 'lucide-react'
+import { User, Download, Settings, Bell, LogOut } from 'lucide-react'
 import { useUserStore } from '../store/useUserStore'
 
 interface SidebarProps {
@@ -10,9 +10,7 @@ interface SidebarProps {
 const baseMenuItems = [
   { id: 'profile', label: '个人资料', icon: User, path: '/user' },
   { id: 'history', label: '下载历史', icon: Download, path: '/user?tab=history' },
-  { id: 'orders', label: '订单记录', icon: ReceiptText, path: '/user?tab=orders' },
   { id: 'notifications', label: '通知中心', icon: Bell, path: '/user?tab=notifications' },
-  { id: 'vip', label: '会员中心', icon: Crown, path: '/vip' },
   { id: 'settings', label: '账户设置', icon: Settings, path: '/user?tab=settings' },
 ]
 

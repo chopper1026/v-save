@@ -26,9 +26,7 @@ export class AuthService {
       return null;
     }
 
-    const syncedUser = this.usersService.normalizeMembershipState(
-      await this.usersService.syncRoleByPolicy(user),
-    );
+    const syncedUser = await this.usersService.syncRoleByPolicy(user);
     const { password: _, ...result } = syncedUser;
     return result;
   }
@@ -44,7 +42,6 @@ export class AuthService {
       email: user.email,
       role: user.role,
       accountStatus: user.accountStatus,
-      membershipLevel: user.membershipLevel,
     };
     return {
       access_token: this.jwtService.sign(payload),
@@ -53,11 +50,9 @@ export class AuthService {
         email: user.email,
         nickname: user.nickname,
         role: user.role,
-        membershipLevel: user.membershipLevel,
         accountStatus: user.accountStatus,
         avatar: user.avatar,
         phone: user.phone,
-        vipExpireDate: user.vipExpireDate,
         downloadCount: user.downloadCount,
       },
     };
@@ -70,15 +65,12 @@ export class AuthService {
       registerDto.nickname,
     );
 
-    const syncedUser = this.usersService.normalizeMembershipState(
-      await this.usersService.syncRoleByPolicy(user),
-    );
+    const syncedUser = await this.usersService.syncRoleByPolicy(user);
     const payload = {
       sub: syncedUser.id,
       email: syncedUser.email,
       role: syncedUser.role,
       accountStatus: syncedUser.accountStatus,
-      membershipLevel: syncedUser.membershipLevel,
     };
     return {
       access_token: this.jwtService.sign(payload),
@@ -87,11 +79,9 @@ export class AuthService {
         email: syncedUser.email,
         nickname: syncedUser.nickname,
         role: syncedUser.role,
-        membershipLevel: syncedUser.membershipLevel,
         accountStatus: syncedUser.accountStatus,
         avatar: syncedUser.avatar,
         phone: syncedUser.phone,
-        vipExpireDate: syncedUser.vipExpireDate,
         downloadCount: syncedUser.downloadCount,
       },
     };

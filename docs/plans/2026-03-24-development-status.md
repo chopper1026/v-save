@@ -6,9 +6,9 @@
 - 抖音网页登录态管理主方案已经明确收敛为 `Companion App + 本机 Chrome + backend bridge session`。
 - 旧的抖音服务端二维码浏览器、Xvfb、有头 Chromium、协议级二维码复刻代码已从主线移除，不再作为当前实现维护。
 - Companion 主链路的代码、测试、构建和本地 Docker 联调已完成收口，但真实抖音账号的端到端实机扫码回归仍未在文档上标记为 fully verified。
-- Web 会员支付主链路（Stripe 一次性购买）已可用，覆盖创建订单、回跳同步、会员状态刷新与退款/对账基础能力。
-- `/vip` 与 `/user?tab=orders` 已补齐待支付订单恢复与续付入口，用户中断支付后可继续完成支付。
-- 会员支付前端已收口为人民币单币种，页面不再展示币种选择。
+- 会员、支付、订单体系已从主线移除，不再作为当前实现维护。
+- Web 与 Mobile 账户页已收口到资料、通知、下载历史与账号治理能力。
+- 下载权限已统一为登录用户可直接使用，不再区分免费/VIP 权益。
 
 ## 本轮已完成
 
@@ -28,15 +28,11 @@
   - `DouyinQrAuthFlow` 实体
 - Kuaishou parser 不再复用 `DOUYIN_QR_CHROME_PATH` 这类旧环境变量。
 
-### Payments（新增）
+### Billing Cleanup（新增）
 
-- 后端新增并接通 `POST /api/payments/orders/:orderNo/recheckout`（JWT 保护），用于待支付订单续付。
-- 续付逻辑已收口：仅允许订单 owner 对 `PENDING_PAYMENT` 订单发起续付；成功后重建 Stripe Checkout Session 并回写订单会话标识。
-- 会员中心 `/vip` 支付已收口为人民币单币种，不再展示币种选择；下单请求不再携带 `preferredCurrency`。
-- `/vip` 已增加待支付订单恢复优先级：`URL orderNo -> localStorage 最近待支付订单 -> 服务端最新待支付订单`。
-- 订单进入 `PAID/EXPIRED/CANCELED` 终态后会清理本地待支付指针，避免重复恢复旧订单。
-- `/vip` 支持“继续支付”按钮，调用 recheckout 并跳转最新 `checkoutUrl`。
-- 用户中心 `/user?tab=orders` 的待支付订单已提供“继续支付”，可直接回到 `/vip?orderNo=...` 进入续付链路。
+- 后端 `payments` 模块、订单接口、退款/对账逻辑与 Stripe 依赖已从主线移除。
+- `users` 表中的会员字段与 `download_history` 中的额度统计字段已清理。
+- Web `/vip`、用户中心订单区与后台订单管理入口已删除或重定向到存量页面。
 
 ### Frontend
 
@@ -88,13 +84,9 @@
 
 - `npm --prefix backend test -- douyin-auth.controller.spec.ts douyin-auth.service.spec.ts douyin-bridge-auth.service.spec.ts --runInBand`
   - PASS
-- `npm --prefix backend test -- src/payments/payments.service.spec.ts --runInBand`
-  - PASS
 - `npm --prefix backend run build`
   - PASS
 - `npm --prefix frontend test`
-  - PASS
-- `npm --prefix frontend test -- src/pages/VIPCenter.test.tsx src/pages/UserCenter.orders.test.tsx`
   - PASS
 - `npm --prefix frontend run build`
   - PASS

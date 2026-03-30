@@ -13,7 +13,6 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { QueryAdminAuditDto } from './dto/query-admin-audit.dto';
 import { QueryAdminUsersDto } from './dto/query-admin-users.dto';
-import { UpdateUserMembershipDto } from './dto/update-user-membership.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { AdminUsersService } from './admin-users.service';
@@ -74,24 +73,6 @@ export class AdminUsersController {
     };
   }
 
-  @Patch(':id/membership')
-  async updateMembership(
-    @Request() req: RequestWithUser,
-    @Param('id') id: string,
-    @Body() body: UpdateUserMembershipDto,
-  ) {
-    const userId = req.user?.id || '';
-    const updated = await this.adminUsersService.updateMembership(
-      userId,
-      id,
-      body,
-    );
-    return {
-      success: true,
-      data: updated,
-    };
-  }
-
   @Patch(':id/status')
   async updateStatus(
     @Request() req: RequestWithUser,
@@ -106,4 +87,3 @@ export class AdminUsersController {
     };
   }
 }
-

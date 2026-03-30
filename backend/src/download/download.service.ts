@@ -59,10 +59,6 @@ import {
 } from '../observability/observability.utils';
 
 const execFileAsync = promisify(execFile);
-const FREE_DAILY_DOWNLOAD_LIMIT = 5;
-const FREE_ALLOWED_PLATFORMS: VideoInfo['platform'][] = ['douyin', 'bilibili'];
-const FREE_ALLOWED_QUALITIES = [VideoQuality.SD, VideoQuality.HD] as const;
-const QUOTA_TIME_ZONE = 'Asia/Shanghai';
 
 /**
  * 视频信息接口（包含额外字段）
@@ -160,9 +156,6 @@ interface CheckDownloadPermissionInput {
 @Injectable()
 export class DownloadService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DownloadService.name);
-  private readonly freeMaxDownloads = FREE_DAILY_DOWNLOAD_LIMIT;
-  private readonly freeAllowedQualities: VideoQuality[] = [...FREE_ALLOWED_QUALITIES];
-  private readonly freeAllowedPlatforms = [...FREE_ALLOWED_PLATFORMS];
   private readonly ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
   private readonly ffprobePath = process.env.FFPROBE_PATH || 'ffprobe';
   private readonly ytDlpPath = this.resolveYtDlpPath();
@@ -361,52 +354,7 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    const isVipUser = user.membershipLevel === 'VIP';
-    if (isVipUser) {
-      return { allowed: true };
-    }
-
-    if (!this.freeAllowedPlatforms.includes(input.platform)) {
-      return {
-        allowed: false,
-        code: 'FREE_PLATFORM_NOT_SUPPORTED',
-        message: '免费用户当前仅支持抖音和哔哩哔哩，请升级VIP解锁全平台下载',
-      };
-    }
-
-    const selectedQuality = input.quality || VideoQuality.HD;
-    if (!this.freeAllowedQualities.includes(selectedQuality)) {
-      return {
-        allowed: false,
-        code: 'QUALITY_LIMIT_FOR_FREE',
-        message: '免费用户仅支持 720P 及以下画质，请升级VIP解锁高清画质',
-      };
-    }
-
-    const usedToday = await this.getFreeDownloadUsageToday(input.userId);
-    if (usedToday >= this.freeMaxDownloads) {
-      return {
-        allowed: false,
-        code: 'FREE_LIMIT_REACHED',
-        message: `免费用户每天最多可下载 ${this.freeMaxDownloads} 次，请升级VIP继续使用`,
-      };
-    }
-
     return { allowed: true };
-  }
-
-
-  async getFreeDownloadUsageToday(userId: string): Promise<number> {
-    const { start, end } = this.getShanghaiDayRange();
-    return this.downloadHistoryRepository
-      .createQueryBuilder('history')
-      .where('history.userId = :userId', { userId })
-      .andWhere('history.countsTowardQuota = :countsTowardQuota', {
-        countsTowardQuota: true,
-      })
-      .andWhere('history.createdAt >= :start', { start })
-      .andWhere('history.createdAt <= :end', { end })
-      .getCount();
   }
 
   /**
@@ -465,35 +413,6 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
     }
 
     return '';
-  }
-
-  private getShanghaiDayRange(): { start: Date; end: Date } {
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: QUOTA_TIME_ZONE,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    const parts = formatter.formatToParts(now);
-    const year = parts.find((part) => part.type === 'year')?.value;
-    const month = parts.find((part) => part.type === 'month')?.value;
-    const day = parts.find((part) => part.type === 'day')?.value;
-
-    if (!year || !month || !day) {
-      const fallbackStart = new Date(now);
-      fallbackStart.setHours(0, 0, 0, 0);
-      const fallbackEnd = new Date(fallbackStart);
-      fallbackEnd.setHours(23, 59, 59, 999);
-      return {
-        start: fallbackStart,
-        end: fallbackEnd,
-      };
-    }
-
-    const start = new Date(`${year}-${month}-${day}T00:00:00+08:00`);
-    const end = new Date(`${year}-${month}-${day}T23:59:59.999+08:00`);
-    return { start, end };
   }
 
   private trimWrappedUrl(value: string): string {
@@ -851,7 +770,6 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
       undefined,
       {
         status: 'pending',
-        countsTowardQuota: true,
       },
     );
 
@@ -3603,7 +3521,6 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
     downloadUrl?: string,
     options?: {
       status?: string;
-      countsTowardQuota?: boolean;
     },
   ): Promise<DownloadHistory> {
     // 如果传入的是字符串（JSON），解析它
@@ -3631,7 +3548,6 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
       quality: quality || VideoQuality.HD,
       downloadUrl: downloadUrl || info.videoUrl,
       status: options?.status || 'completed',
-      countsTowardQuota: options?.countsTowardQuota ?? true,
       hiddenAt: null,
       userId: userId || null,
     });

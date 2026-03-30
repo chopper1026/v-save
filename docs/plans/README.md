@@ -40,9 +40,9 @@
 4. `docs/plans/2026-03-23-douyin-companion-app-runbook.md`
 - macOS 管理员安装、启动、allowlist 配置和网页登录态管理使用步骤。
 
-5. `video-downloader-ui/design/User-Flow-Wireframes.md`
-6. `video-downloader-ui/design/UI-Design-Spec.md`
-7. `video-downloader-ui/design/Component-Design.md`
+5. `v-save-ui/design/User-Flow-Wireframes.md`
+6. `v-save-ui/design/UI-Design-Spec.md`
+7. `v-save-ui/design/Component-Design.md`
 - 早期 UI 与流程设计稿，仅用于回溯演进。
 
 ## 历史归档文档（仅回溯）
@@ -65,8 +65,8 @@
 16. `docs/plans/2026-03-14-development-status.md`
 17. `docs/plans/2026-03-14-one-week-gap-closure-plan.md`
 18. `docs/plans/2026-03-14-one-week-gap-closure-report.md`
-19. `docs/plans/2026-03-14-video-downloader-design.md`
-20. `docs/plans/2026-03-14-video-downloader-implementation-plan.md`
+19. `docs/plans/2026-03-14-v-save-design.md`
+20. `docs/plans/2026-03-14-v-save-implementation-plan.md`
 
 ## 文档维护规则（强制）
 

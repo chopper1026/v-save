@@ -1,8 +1,5 @@
 import {
   Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Like, Repository } from 'typeorm';
@@ -17,7 +14,6 @@ import {
 export type NotificationLevel = 'info' | 'success' | 'warn' | 'error';
 export type NotificationSource =
   | 'auth'
-  | 'vip'
   | 'account'
   | 'security'
   | 'system';
@@ -47,36 +43,13 @@ interface CreateForSuperAdminsOptions {
 }
 
 @Injectable()
-export class NotificationsService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(NotificationsService.name);
-  private readonly vipReminderIntervalMs = this.readIntegerEnv(
-    'VIP_REMINDER_INTERVAL_MS',
-    60 * 60 * 1000,
-  );
-  private vipReminderTimer: NodeJS.Timeout | null = null;
-  private vipReminderRunning = false;
-
+export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
   ) {}
-
-  onModuleInit() {
-    this.vipReminderTimer = setInterval(() => {
-      void this.runVipReminderJob();
-    }, this.vipReminderIntervalMs);
-
-    void this.runVipReminderJob();
-  }
-
-  onModuleDestroy() {
-    if (this.vipReminderTimer) {
-      clearInterval(this.vipReminderTimer);
-      this.vipReminderTimer = null;
-    }
-  }
 
   async create(input: CreateNotificationInput): Promise<Notification> {
     const dedupKey = String(input.dedupKey || '').trim() || null;
@@ -268,80 +241,6 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       .where('userId = :userId', { userId })
       .execute();
     return result.affected || 0;
-  }
-
-  private async runVipReminderJob(): Promise<void> {
-    if (this.vipReminderRunning) {
-      return;
-    }
-    this.vipReminderRunning = true;
-
-    try {
-      const users = await this.userRepository
-        .createQueryBuilder('user')
-        .where('user.vipExpireDate IS NOT NULL')
-        .getMany();
-
-      const now = Date.now();
-      const dayMs = 24 * 60 * 60 * 1000;
-      const reminderDays = new Set([7, 3, 1]);
-
-      for (const user of users) {
-        const expireTime = user.vipExpireDate
-          ? new Date(user.vipExpireDate).getTime()
-          : Number.NaN;
-        if (!Number.isFinite(expireTime)) {
-          continue;
-        }
-
-        if (user.membershipLevel === 'VIP' && expireTime <= now) {
-          user.membershipLevel = 'FREE';
-          await this.userRepository.save(user);
-
-          const expiredDay = new Date(expireTime).toISOString().slice(0, 10);
-          await this.createForUser(user.id, {
-            type: 'VIP_EXPIRED',
-            level: 'warn',
-            source: 'vip',
-            title: '会员已过期',
-            content: '您的会员权益已到期，如需继续使用高清和会员能力，请及时续费。',
-            actionUrl: '/vip',
-            dedupKey: `vip-expired:${user.id}:${expiredDay}`,
-          });
-          continue;
-        }
-
-        if (user.membershipLevel !== 'VIP' || expireTime <= now) {
-          continue;
-        }
-
-        const remainMs = expireTime - now;
-        const daysLeft = Math.ceil(remainMs / dayMs);
-        if (!reminderDays.has(daysLeft)) {
-          continue;
-        }
-
-        const expireDay = new Date(expireTime).toISOString().slice(0, 10);
-        await this.createForUser(user.id, {
-          type: 'VIP_EXPIRE_SOON',
-          level: daysLeft <= 1 ? 'warn' : 'info',
-          source: 'vip',
-          title: '会员即将到期',
-          content: `您的会员将在 ${daysLeft} 天后到期（到期日：${expireDay}），建议提前续费避免影响下载体验。`,
-          actionUrl: '/vip',
-          dedupKey: `vip-expire-soon:${user.id}:${daysLeft}:${expireDay}`,
-        });
-      }
-    } catch (error: any) {
-      this.logger.warn(`会员提醒任务执行失败: ${error?.message || 'unknown'}`);
-    } finally {
-      this.vipReminderRunning = false;
-    }
-  }
-
-  private readIntegerEnv(name: string, fallback: number): number {
-    const parsed = Number.parseInt(process.env[name] || '', 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   }
 
   private async isSuperAdminUser(userId: string): Promise<boolean> {
