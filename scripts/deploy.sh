@@ -12,6 +12,7 @@ DEFAULT_DB_USER="vsave_user"
 DEFAULT_TIMEZONE="Asia/Shanghai"
 
 FORCE_YES=0
+FORCE_REFRESH_REPO=0
 USER_REPO_URL="${V_SAVE_REPO_URL:-$REPO_URL_DEFAULT}"
 USER_REPO_ARCHIVE_URL="${V_SAVE_REPO_ARCHIVE_URL:-$REPO_ARCHIVE_URL_DEFAULT}"
 USER_INSTALL_DIR="${V_SAVE_INSTALL_DIR:-}"
@@ -578,8 +579,39 @@ download_repo_archive() {
   rm -rf "$temp_extract"
 }
 
+is_repo_checkout_dir() {
+  local target_dir="$1"
+  [[ -f "${target_dir}/docker-compose.yml" && -d "${target_dir}/backend" && -d "${target_dir}/frontend" ]]
+}
+
+refresh_repo_archive_preserve_state() {
+  local target_dir="$1"
+  local backup_dir
+  backup_dir="$(mktemp -d)"
+
+  if [[ -f "${target_dir}/.env" ]]; then
+    cp "${target_dir}/.env" "${backup_dir}/root.env"
+  fi
+  if [[ -f "${target_dir}/backend/.env" ]]; then
+    mkdir -p "${backup_dir}/backend"
+    cp "${target_dir}/backend/.env" "${backup_dir}/backend/.env"
+  fi
+
+  download_repo_archive "$target_dir"
+
+  if [[ -f "${backup_dir}/root.env" ]]; then
+    cp "${backup_dir}/root.env" "${target_dir}/.env"
+  fi
+  if [[ -f "${backup_dir}/backend/.env" ]]; then
+    mkdir -p "${target_dir}/backend"
+    cp "${backup_dir}/backend/.env" "${target_dir}/backend/.env"
+  fi
+
+  rm -rf "$backup_dir"
+}
+
 ensure_repo_checkout() {
-  if [[ -f "./docker-compose.yml" && -d "./backend" && -d "./frontend" ]]; then
+  if is_repo_checkout_dir "."; then
     REPO_DIR="$(pwd)"
     log_info "检测到当前目录已是 ${PROJECT_NAME} 仓库，直接在本地执行部署。"
     return
@@ -592,6 +624,17 @@ ensure_repo_checkout() {
     log_info "检测到已有仓库副本：${target_dir}"
     git -C "$target_dir" fetch --all --prune >/dev/null
     git -C "$target_dir" pull --ff-only >/dev/null
+    REPO_DIR="$target_dir"
+    return
+  fi
+
+  if is_repo_checkout_dir "$target_dir"; then
+    if [[ "$FORCE_REFRESH_REPO" -eq 1 ]]; then
+      log_info "检测到已有解压仓库副本：${target_dir}，按要求刷新最新代码并保留现有配置。"
+      refresh_repo_archive_preserve_state "$target_dir"
+    else
+      log_info "检测到已有解压仓库副本：${target_dir}，复用现有目录。"
+    fi
     REPO_DIR="$target_dir"
     return
   fi
@@ -857,6 +900,10 @@ parse_args() {
         FORCE_YES=1
         shift
         ;;
+      --refresh-repo)
+        FORCE_REFRESH_REPO=1
+        shift
+        ;;
       --install-dir)
         USER_INSTALL_DIR="${2:-}"
         [[ -n "$USER_INSTALL_DIR" ]] || die '--install-dir 需要跟一个目录参数。'
@@ -884,6 +931,7 @@ parse_args() {
 
 可选参数：
   -y, --yes              跳过交互确认，默认自动继续
+  --refresh-repo         刷新仓库代码；无 git 时会重新下载压缩包并保留现有 .env 配置
   --install-dir <目录>   指定仓库落地目录
   --repo-url <地址>      指定仓库 Git 地址
   --public-host <地址>   指定部署完成后展示的访问域名或 IP

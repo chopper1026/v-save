@@ -52,6 +52,7 @@ tmpdir="$(mktemp -d)" \
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --public-host your.domain.com
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --install-dir /opt/v-save
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --force-region cn
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --refresh-repo
 ```
 
 如果服务器位于中国大陆，脚本会优先从 Docker 官方 GitHub 仓库下载安装脚本，并默认使用 `AzureChinaCloud` 安装镜像。若你需要手动覆盖，可这样执行：
@@ -71,6 +72,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 - 写入部署目录下的 `.env` 与 `backend/.env`。
 - 拉起 `frontend + backend + mysql`。
 - 输出访问地址、数据库用户名和随机生成的数据库密码。
+
+补充说明：
+
+- 如果服务器没有安装 `git`，脚本会使用仓库压缩包部署；再次运行时默认复用现有安装目录，不会每次都重新下载。
+- 只有显式加上 `--refresh-repo` 时，脚本才会重新下载最新压缩包；刷新时会保留现有 `.env` 与 `backend/.env`。
 
 ### 方式二：源码开发
 
