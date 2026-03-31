@@ -18,12 +18,17 @@ enum CompanionConfig {
     }
 
     static var chromeProfileDisplayPath: String {
-        "~/Library/Application Support/\(appName)/chrome-profile"
+        "~/Library/Application Support/\(appName)/chrome-profiles/<session-id>"
     }
 
     static func chromeProfileURL(fileManager: FileManager = .default) -> URL {
+        chromeProfilesDirectory(fileManager: fileManager)
+            .appendingPathComponent(UUID().uuidString.lowercased(), isDirectory: true)
+    }
+
+    static func chromeProfilesDirectory(fileManager: FileManager = .default) -> URL {
         applicationSupportDirectory(fileManager: fileManager)
-            .appendingPathComponent("chrome-profile", isDirectory: true)
+            .appendingPathComponent("chrome-profiles", isDirectory: true)
     }
 
     static func applicationSupportDirectory(fileManager: FileManager = .default) -> URL {
@@ -51,21 +56,32 @@ enum CompanionConfig {
     }
 }
 
-struct BackendOriginValidator: Equatable {
+struct BackendOriginValidator {
     private let explicitAllowlist: Set<String>
+    private let configuredOriginProvider: () -> String?
 
-    init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+    init(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        configuredOriginProvider: @escaping () -> String? = { nil }
+    ) {
         let raw = environment["V_SAVE_ALLOWED_BACKEND_ORIGINS"] ?? ""
         let values = raw
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .compactMap { CompanionConfig.normalizedOriginURL($0)?.absoluteString }
             .filter { !$0.isEmpty }
         self.explicitAllowlist = Set(values)
+        self.configuredOriginProvider = configuredOriginProvider
     }
 
     func isAllowedBackendOrigin(_ origin: String) -> Bool {
-        guard let parsed = normalizedURL(origin) else {
+        guard let parsed = CompanionConfig.normalizedOriginURL(origin) else {
             return false
+        }
+
+        if let configuredOrigin = normalizedConfiguredOrigin(),
+           configuredOrigin.absoluteString == parsed.absoluteString {
+            return true
         }
 
         if !explicitAllowlist.isEmpty {
@@ -76,16 +92,41 @@ struct BackendOriginValidator: Equatable {
     }
 
     func isAllowedLocalBridgeRequestOrigin(_ origin: String) -> Bool {
-        guard let parsed = normalizedURL(origin) else {
+        guard let parsed = CompanionConfig.normalizedOriginURL(origin) else {
             return false
+        }
+
+        if let configuredOrigin = normalizedConfiguredOrigin(),
+           configuredOrigin.absoluteString == parsed.absoluteString {
+            return true
         }
 
         return isTrustedOrigin(parsed)
     }
 
-    private func normalizedURL(_ value: String) -> URL? {
+    private func normalizedConfiguredOrigin() -> URL? {
+        CompanionConfig.normalizedOriginURL(configuredOriginProvider() ?? "")
+    }
+
+    private func isTrustedOrigin(_ url: URL) -> Bool {
+        let host = (url.host ?? "").lowercased()
+        if url.scheme == "https" {
+            return true
+        }
+
+        return host == "localhost" || host == "127.0.0.1" || host == "::1"
+    }
+}
+
+extension CompanionConfig {
+    static func normalizedOriginURL(_ value: String) -> URL? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let url = URL(string: trimmed), let scheme = url.scheme, let host = url.host else {
+            return nil
+        }
+
+        guard scheme.caseInsensitiveCompare("http") == .orderedSame
+            || scheme.caseInsensitiveCompare("https") == .orderedSame else {
             return nil
         }
 
@@ -96,14 +137,5 @@ struct BackendOriginValidator: Equatable {
         components?.query = nil
         components?.fragment = nil
         return components?.url
-    }
-
-    private func isTrustedOrigin(_ url: URL) -> Bool {
-        let host = (url.host ?? "").lowercased()
-        if url.scheme == "https" {
-            return true
-        }
-
-        return host == "localhost" || host == "127.0.0.1" || host == "::1"
     }
 }

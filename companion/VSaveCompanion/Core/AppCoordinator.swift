@@ -6,6 +6,7 @@ final class CompanionAppCoordinator {
     private let logger: CompanionLogger
     private let sessionStore: LocalBridgeSessionStore
     private let runtimeStore: CompanionRuntimeStore
+    private let adminPageOriginController: AdminPageOriginController
     private let openAtLoginController: OpenAtLoginController
     private let serverSyncClient: CompanionServerSyncClient
     private let statusBarManager: StatusBarManager
@@ -20,6 +21,7 @@ final class CompanionAppCoordinator {
         logger: CompanionLogger = CompanionLogger(),
         sessionStore: LocalBridgeSessionStore = LocalBridgeSessionStore(),
         runtimeStore: CompanionRuntimeStore? = nil,
+        adminPageOriginController: AdminPageOriginController = AdminPageOriginController(),
         openAtLoginController: OpenAtLoginController = OpenAtLoginController(),
         serverSyncClient: CompanionServerSyncClient = CompanionServerSyncClient(),
         statusBarManager: StatusBarManager = StatusBarManager(),
@@ -28,6 +30,7 @@ final class CompanionAppCoordinator {
         self.logger = logger
         self.sessionStore = sessionStore
         self.runtimeStore = runtimeStore ?? CompanionRuntimeStore(appVersion: appVersion)
+        self.adminPageOriginController = adminPageOriginController
         self.openAtLoginController = openAtLoginController
         self.serverSyncClient = serverSyncClient
         self.statusBarManager = statusBarManager
@@ -51,6 +54,7 @@ final class CompanionAppCoordinator {
                     lastRestartAt: ISO8601Timestamp.now(),
                     serverStatus: "stopped",
                     serverAddress: nil,
+                    adminPageOrigin: nil,
                     chromeStatus: "idle",
                     currentSession: nil,
                     lastError: nil,
@@ -64,6 +68,7 @@ final class CompanionAppCoordinator {
         )
 
         let openAtLoginState = openAtLoginController.initialize()
+        runtimeStore.setAdminPageOrigin(adminPageOriginController.currentOrigin())
         runtimeStore.setOpenAtLogin(
             enabled: openAtLoginState.enabled,
             error: openAtLoginState.lastError
@@ -83,6 +88,9 @@ final class CompanionAppCoordinator {
 
     private func handleStatusBarAction(_ action: StatusBarAction) {
         switch action {
+        case .configureAdminPageOrigin:
+            configureAdminPageOrigin()
+
         case .toggleOpenAtLogin:
             Task {
                 let desiredEnabled = !runtimeStore.snapshot.openAtLoginEnabled
@@ -126,6 +134,13 @@ final class CompanionAppCoordinator {
         currentChrome = nil
         if let chrome {
             await chrome.stop()
+            do {
+                if FileManager.default.fileExists(atPath: chrome.userDataURL.path) {
+                    try FileManager.default.removeItem(at: chrome.userDataURL)
+                }
+            } catch {
+                logger.error("清理临时 Chrome Profile 失败: \((error as NSError).localizedDescription)")
+            }
         }
         _ = ensureChromeAvailability()
     }
@@ -226,6 +241,11 @@ final class CompanionAppCoordinator {
         let requestHandler = LocalBridgeRequestHandler(
             store: sessionStore,
             logger: logger,
+            validator: BackendOriginValidator(
+                configuredOriginProvider: { [weak self] in
+                    self?.adminPageOriginController.currentOrigin()
+                }
+            ),
             onStartLogin: { [weak self] session in
                 guard let self else { return }
                 await self.beginLoginFlow(for: session)
@@ -287,5 +307,43 @@ final class CompanionAppCoordinator {
             self.logger.info("本机登录助手已重启")
             self.restartTask = nil
         }
+    }
+
+    private func configureAdminPageOrigin() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "设置管理端页面地址"
+        alert.informativeText = "请输入你在浏览器里打开的 V-SAVE 管理端页面地址。留空可恢复默认来源规则。"
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "取消")
+
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        textField.placeholderString = "http://115.190.228.9"
+        textField.stringValue = adminPageOriginController.currentOrigin() ?? ""
+        alert.accessoryView = textField
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else {
+            return
+        }
+
+        let state = adminPageOriginController.setOrigin(textField.stringValue)
+        if let error = state.lastError {
+            logger.error("保存管理端页面地址失败: \(error)")
+            showAdminPageOriginSaveError(error)
+            return
+        }
+
+        runtimeStore.setAdminPageOrigin(state.origin)
+        logger.info("管理端页面地址已更新: \(state.origin ?? "未设置")")
+    }
+
+    private func showAdminPageOriginSaveError(_ message: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "保存管理端页面地址失败"
+        alert.informativeText = message
+        alert.addButton(withTitle: "确定")
+        alert.runModal()
     }
 }

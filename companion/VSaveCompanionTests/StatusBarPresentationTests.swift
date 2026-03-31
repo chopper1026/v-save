@@ -19,6 +19,7 @@ final class StatusBarPresentationTests: XCTestCase {
                 lastRestartAt: "2026-03-24T02:09:20.860Z",
                 serverStatus: "running",
                 serverAddress: "http://127.0.0.1:37219",
+                adminPageOrigin: "http://115.190.228.9",
                 chromeStatus: "ready",
                 currentSession: PublicLocalBridgeSession(
                     authSessionId: "bridge-1",
@@ -41,6 +42,7 @@ final class StatusBarPresentationTests: XCTestCase {
         XCTAssertEqual(snapshot.helperStatus, "运行中")
         XCTAssertEqual(snapshot.chromeStatus, "已检测到")
         XCTAssertEqual(snapshot.currentSessionStatus, "等待扫码")
+        XCTAssertEqual(snapshot.adminPageOrigin, "http://115.190.228.9")
         XCTAssertTrue(snapshot.openAtLoginEnabled)
     }
 
@@ -52,6 +54,7 @@ final class StatusBarPresentationTests: XCTestCase {
             helperStatus: "运行中",
             helperTone: .success,
             serverAddress: "http://127.0.0.1:37219",
+            adminPageOrigin: "http://115.190.228.9",
             chromeStatus: "已检测到",
             currentSessionId: "无活动会话",
             currentSessionStatus: "--",
@@ -68,11 +71,14 @@ final class StatusBarPresentationTests: XCTestCase {
             actionSelector: #selector(DummyTarget.handleMenuItem(_:))
         ).buildMenu()
 
-        XCTAssertEqual(menu.items.count, 8)
+        XCTAssertEqual(menu.items.count, 9)
         XCTAssertNotNil(menu.items.first?.view)
         XCTAssertFalse(menu.items.contains(where: { $0.isSeparatorItem }))
         XCTAssertLessThanOrEqual(menu.items.first?.view?.frame.width ?? .greatestFiniteMagnitude, 332)
-        XCTAssertEqual(menu.items.suffix(3).map { $0.title }, ["关闭开机自启", "重启助手", "退出助手"])
-        XCTAssertTrue(menu.items.suffix(3).allSatisfy { $0.view == nil })
+        XCTAssertEqual(
+            menu.items.suffix(4).map { $0.title },
+            ["设置管理端页面地址...", "关闭开机自启", "重启助手", "退出助手"]
+        )
+        XCTAssertTrue(menu.items.suffix(4).allSatisfy { $0.view == nil })
     }
 }
