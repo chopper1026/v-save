@@ -677,9 +677,9 @@ load_or_generate_env() {
   if [[ "$USE_CN_MIRROR" -eq 1 ]]; then
     NPM_REGISTRY="${V_SAVE_NPM_REGISTRY:-https://registry.npmmirror.com}"
     PIP_INDEX_URL="${V_SAVE_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
-    APT_MIRROR="${V_SAVE_APT_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian}"
-    APT_SECURITY_MIRROR="${V_SAVE_APT_SECURITY_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/debian-security}"
-    ALPINE_MIRROR="${V_SAVE_ALPINE_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/alpine}"
+    APT_MIRROR="${V_SAVE_APT_MIRROR:-http://mirrors.tuna.tsinghua.edu.cn/debian}"
+    APT_SECURITY_MIRROR="${V_SAVE_APT_SECURITY_MIRROR:-http://mirrors.tuna.tsinghua.edu.cn/debian-security}"
+    ALPINE_MIRROR="${V_SAVE_ALPINE_MIRROR:-http://mirrors.tuna.tsinghua.edu.cn/alpine}"
   else
     NPM_REGISTRY=""
     PIP_INDEX_URL=""

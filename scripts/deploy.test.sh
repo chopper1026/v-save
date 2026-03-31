@@ -101,6 +101,26 @@ main() {
     "docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin" \
     "Docker 安装包列表应与官方文档保持一致，不应包含额外插件"
 
+  local temp_repo
+  temp_repo="$(mktemp -d)"
+  mkdir -p "$temp_repo/backend"
+  REPO_DIR="$temp_repo"
+  DEPLOY_HOST="8.8.8.8"
+  USE_CN_MIRROR=1
+  FRONTEND_PORT=""
+  BACKEND_PORT=""
+  MYSQL_PORT=""
+  MYSQL_ROOT_PASSWORD=""
+  MYSQL_PASSWORD=""
+  MYSQL_USER=""
+  MYSQL_DATABASE=""
+  JWT_SECRET=""
+  load_or_generate_env
+  assert_eq "$APT_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/debian" "中国大陆环境下的 Debian 镜像应默认使用 HTTP，避免基础镜像缺证书导致 APT 失败"
+  assert_eq "$APT_SECURITY_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/debian-security" "中国大陆环境下的 Debian Security 镜像应默认使用 HTTP"
+  assert_eq "$ALPINE_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/alpine" "中国大陆环境下的 Alpine 镜像应默认使用 HTTP"
+  rm -rf "$temp_repo"
+
   PROJECT_NAME="V-SAVE"
   WEB_PUBLIC_ORIGIN="http://demo.example.com"
   PUBLIC_API_ORIGIN="http://demo.example.com/api"
