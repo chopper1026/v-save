@@ -66,6 +66,18 @@ has_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
 
+run_as_root() {
+  if [[ $EUID -eq 0 ]]; then
+    "$@"
+    return
+  fi
+  if has_cmd sudo; then
+    sudo "$@"
+    return
+  fi
+  die '当前账号既不是 root，也没有 sudo，无法执行需要管理员权限的安装步骤。'
+}
+
 normalize_arch() {
   case "${1:-}" in
     x86_64|amd64)
@@ -315,8 +327,93 @@ get_docker_install_mirror_flag() {
   printf '\n'
 }
 
-install_docker() {
-  log_info '开始安装 Docker（官方安装脚本）...'
+get_docker_repo_root_url() {
+  if [[ "$USE_CN_MIRROR" -eq 1 ]]; then
+    printf '%s\n' "${V_SAVE_DOCKER_REPO_ROOT_CN:-${V_SAVE_DOCKER_REPO_ROOT:-https://mirror.azure.cn/docker-ce/linux}}"
+    return
+  fi
+
+  printf '%s\n' "${V_SAVE_DOCKER_REPO_ROOT:-https://download.docker.com/linux}"
+}
+
+get_docker_rpm_repo_url() {
+  local os_id="${1:-}"
+  local repo_family="centos"
+
+  case "$os_id" in
+    fedora)
+      repo_family="fedora"
+      ;;
+  esac
+
+  printf '%s/%s/docker-ce.repo\n' "$(get_docker_repo_root_url)" "$repo_family"
+}
+
+get_docker_packages() {
+  printf '%s\n' "docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
+}
+
+get_os_release_value() {
+  local key="$1"
+  if [[ ! -f /etc/os-release ]]; then
+    return 0
+  fi
+  awk -F= -v target="$key" '$1 == target {print substr($0, index($0, "=") + 1)}' /etc/os-release | tr -d '"' | tail -n 1
+}
+
+install_docker_with_apt() {
+  local os_id="$1"
+  local codename="$2"
+  local repo_root
+  local packages
+
+  repo_root="$(get_docker_repo_root_url)"
+  packages="$(get_docker_packages)"
+
+  log_info "开始通过 APT 安装 Docker（${os_id}/${codename}）..."
+  run_as_root apt-get update -y
+  run_as_root apt-get install -y ca-certificates curl
+  run_as_root install -m 0755 -d /etc/apt/keyrings
+  run_as_root curl -fsSL "${repo_root}/${os_id}/gpg" -o /etc/apt/keyrings/docker.asc
+  run_as_root chmod a+r /etc/apt/keyrings/docker.asc
+  run_as_root tee /etc/apt/sources.list.d/docker.sources >/dev/null <<EOF
+Types: deb
+URIs: ${repo_root}/${os_id}
+Suites: ${codename}
+Components: stable
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+  run_as_root apt-get update -y
+  run_as_root apt-get install -y ${packages}
+}
+
+install_docker_with_dnf() {
+  local os_id="$1"
+  local repo_url
+  local packages
+
+  repo_url="$(get_docker_rpm_repo_url "$os_id")"
+  packages="$(get_docker_packages)"
+
+  log_info "开始通过 DNF/YUM 安装 Docker（${os_id}）..."
+  if has_cmd dnf; then
+    run_as_root dnf -y --setopt=install_weak_deps=False install dnf-plugins-core
+    run_as_root rm -f /etc/yum.repos.d/docker-ce.repo /etc/yum.repos.d/docker-ce-staging.repo
+    run_as_root dnf config-manager --add-repo "$repo_url"
+    run_as_root dnf makecache
+    run_as_root dnf -y install ${packages}
+    return
+  fi
+
+  run_as_root yum install -y yum-utils
+  run_as_root rm -f /etc/yum.repos.d/docker-ce.repo /etc/yum.repos.d/docker-ce-staging.repo
+  run_as_root yum-config-manager --add-repo "$repo_url"
+  run_as_root yum makecache
+  run_as_root yum install -y ${packages}
+}
+
+install_docker_with_convenience_script() {
+  log_warn '当前发行版未命中受控安装路径，回退到 Docker 官方安装脚本。'
   local temp_script
   local install_script_url
   local install_mirror
@@ -336,15 +433,30 @@ install_docker() {
     install_cmd+=(--mirror "$install_mirror")
   fi
 
-  if [[ $EUID -eq 0 ]]; then
-    "${install_cmd[@]}"
-  elif has_cmd sudo; then
-    sudo "${install_cmd[@]}"
-  else
-    rm -f "$temp_script"
-    die '当前账号既不是 root，也没有 sudo，无法安装 Docker。'
-  fi
+  run_as_root "${install_cmd[@]}"
   rm -f "$temp_script"
+}
+
+install_docker() {
+  local os_id=""
+  local codename=""
+
+  os_id="$(get_os_release_value ID)"
+  codename="$(get_os_release_value VERSION_CODENAME)"
+  [[ -n "$codename" ]] || codename="$(get_os_release_value UBUNTU_CODENAME)"
+
+  case "$os_id" in
+    ubuntu|debian|raspbian)
+      [[ -n "$codename" ]] || die '当前系统未提供 VERSION_CODENAME，无法自动配置 Docker APT 源。'
+      install_docker_with_apt "$os_id" "$codename"
+      ;;
+    fedora|centos|rhel|rocky|almalinux|ol|opencloudos|anolis|alinux|velinux)
+      install_docker_with_dnf "$os_id"
+      ;;
+    *)
+      install_docker_with_convenience_script
+      ;;
+  esac
 
   ensure_sudo_prefix
   if has_cmd systemctl; then
