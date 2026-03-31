@@ -5,6 +5,7 @@ import axios from 'axios'
 import { useUserStore } from '../store/useUserStore'
 import { api, mapApiUserToStoreUser, type AuthResponse } from '../lib/api'
 import AuthLayout from '../components/AuthLayout'
+import { usePublicSystemSettings } from '../hooks/usePublicSystemSettings'
 
 export default function Register() {
   const [name, setName] = useState('')
@@ -18,6 +19,7 @@ export default function Register() {
   const login = useUserStore((state) => state.login)
   const isLoggedIn = useUserStore((state) => state.isLoggedIn)
   const isHydrated = useUserStore((state) => state.isHydrated)
+  const { isLoaded: isSettingsLoaded, registrationEnabled } = usePublicSystemSettings()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -26,7 +28,13 @@ export default function Register() {
     }
   }, [isHydrated, isLoggedIn, navigate])
 
-  if (!isHydrated || isLoggedIn) {
+  useEffect(() => {
+    if (isHydrated && !isLoggedIn && isSettingsLoaded && !registrationEnabled) {
+      navigate('/login', { replace: true })
+    }
+  }, [isHydrated, isLoggedIn, isSettingsLoaded, navigate, registrationEnabled])
+
+  if (!isHydrated || isLoggedIn || !isSettingsLoaded || !registrationEnabled) {
     return null
   }
 

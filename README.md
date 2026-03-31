@@ -68,15 +68,17 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 - 检测架构并选择合适的 Docker 镜像。
 - 在中国大陆网络环境下自动启用镜像加速。
 - 检查 Docker / Docker Compose。
-- 生成随机数据库密码与 `JWT_SECRET`。
+- 生成随机数据库密码、`JWT_SECRET`，以及首次初始化用的超级管理员密码。
 - 写入部署目录下的 `.env` 与 `backend/.env`。
 - 拉起 `frontend + backend + mysql`。
-- 输出访问地址、数据库用户名和随机生成的数据库密码。
+- 输出访问地址、数据库用户名，以及首次生成的超级管理员密码。
 
 补充说明：
 
 - 如果服务器没有安装 `git`，脚本会使用仓库压缩包部署；再次运行时默认复用现有安装目录，不会每次都重新下载。
 - 只有显式加上 `--refresh-repo` 时，脚本才会重新下载最新压缩包；刷新时会保留现有 `.env` 与 `backend/.env`。
+- 注册入口默认关闭。部署完成后可用自动生成的超管账号登录后台，在“系统设置”里手动开启注册入口。
+- 一键部署默认超管邮箱是 `admin@gmail.com`；密码仅首次生成时会在终端摘要里明文显示一次，后续重跑脚本不会重置也不会再次回显。
 
 ### 方式二：源码开发
 
@@ -175,6 +177,10 @@ docker compose ps
 - `CORS_ORIGINS`
 - `PUBLIC_API_ORIGIN`
 - `WEB_PUBLIC_ORIGIN`
+- `SUPER_ADMIN_EMAILS`
+- `SUPER_ADMIN_BOOTSTRAP_EMAIL`
+- `SUPER_ADMIN_BOOTSTRAP_PASSWORD`
+- `SUPER_ADMIN_BOOTSTRAP_NICKNAME`
 
 参考文件：
 
@@ -235,6 +241,12 @@ bash scripts/deploy.test.sh
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `GET /api/system-settings/public`
+
+### 后台系统设置
+
+- `GET /api/admin/system-settings`
+- `PUT /api/admin/system-settings`
 
 ### 下载主链路
 
@@ -266,7 +278,7 @@ bash scripts/deploy.test.sh
 - 仓库不包含已跟踪的真实 `.env`、私钥或第三方服务密钥。
 - Web 端登录态只保存在 `sessionStorage`，不会再把明文密码写入浏览器持久存储。
 - 抖音登录态管理页不再显示 Cookie 片段。
-- 部署脚本会生成随机密钥；数据库密码会在当前部署终端摘要里显示一次，`JWT_SECRET` 仅写入配置文件。
+- 部署脚本会生成随机密钥；数据库密码会在当前部署终端摘要里显示，超级管理员初始化密码只会在首次生成时明文显示一次，`JWT_SECRET` 仅写入配置文件。
 
 ## 其他说明
 

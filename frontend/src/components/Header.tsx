@@ -2,10 +2,12 @@ import { Link } from 'react-router-dom'
 import { useUserStore } from '../store/useUserStore'
 import { Video, User, Bell, ShieldCheck } from 'lucide-react'
 import { useUnreadNotificationCount } from '../hooks/useUnreadNotificationCount'
+import { usePublicSystemSettings } from '../hooks/usePublicSystemSettings'
 
 export default function Header() {
   const { user, isLoggedIn, isHydrated } = useUserStore()
   const unreadCount = useUnreadNotificationCount()
+  const { registrationEnabled } = usePublicSystemSettings()
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/78 backdrop-blur-md border-b border-sky-100 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
@@ -61,12 +63,14 @@ export default function Header() {
               >
                 登录
               </Link>
-              <Link
-                to="/register"
-                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-sky-500 to-blue-600 rounded-xl hover:from-sky-600 hover:to-blue-700 transition-colors shadow-[0_8px_18px_rgba(37,99,235,0.3)]"
-              >
-                注册
-              </Link>
+              {registrationEnabled && (
+                <Link
+                  to="/register"
+                  className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-sky-500 to-blue-600 rounded-xl hover:from-sky-600 hover:to-blue-700 transition-colors shadow-[0_8px_18px_rgba(37,99,235,0.3)]"
+                >
+                  注册
+                </Link>
+              )}
             </>
           ) : null}
         </div>

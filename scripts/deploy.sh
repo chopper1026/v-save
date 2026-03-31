@@ -29,6 +29,11 @@ MYSQL_PASSWORD=""
 MYSQL_USER=""
 MYSQL_DATABASE=""
 JWT_SECRET=""
+SUPER_ADMIN_EMAILS=""
+SUPER_ADMIN_BOOTSTRAP_EMAIL=""
+SUPER_ADMIN_BOOTSTRAP_PASSWORD=""
+SUPER_ADMIN_BOOTSTRAP_NICKNAME=""
+SUPER_ADMIN_PASSWORD_GENERATED=0
 PUBLIC_API_ORIGIN=""
 WEB_PUBLIC_ORIGIN=""
 CORS_ORIGINS=""
@@ -130,6 +135,90 @@ read_env_value() {
     return 0
   fi
   awk -F= -v target="$key" '$1 == target {print substr($0, index($0, "=") + 1)}' "$file" | tail -n 1
+}
+
+get_state_file_path() {
+  if [[ -z "${REPO_DIR:-}" ]]; then
+    printf '%s\n' "${HOME}/.${PROJECT_SLUG}-deploy-state.env"
+    return
+  fi
+
+  printf '%s/.%s-deploy-state.env\n' "$(dirname "$REPO_DIR")" "$PROJECT_SLUG"
+}
+
+read_preferred_env_value() {
+  local primary_file="$1"
+  local secondary_file="$2"
+  local key="$3"
+  local value=""
+
+  value="$(read_env_value "$primary_file" "$key")"
+  if [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+    return
+  fi
+
+  read_env_value "$secondary_file" "$key"
+}
+
+normalize_super_admin_email() {
+  printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]' | xargs
+}
+
+normalize_super_admin_emails() {
+  local raw="${1:-}"
+  local entries=()
+  local normalized_entries=()
+  local seen=","
+  local entry=""
+  local IFS=','
+  read -r -a entries <<< "$raw"
+
+  for entry in "${entries[@]}"; do
+    entry="$(normalize_super_admin_email "$entry")"
+    [[ -n "$entry" ]] || continue
+    case "$seen" in
+      *",$entry,"*)
+        ;;
+      *)
+        normalized_entries+=("$entry")
+        seen="${seen}${entry},"
+        ;;
+    esac
+  done
+
+  local joined=""
+  for entry in "${normalized_entries[@]}"; do
+    joined="${joined:+${joined},}${entry}"
+  done
+
+  printf '%s\n' "$joined"
+}
+
+ensure_super_admin_email_in_list() {
+  local normalized_list
+  local normalized_email
+
+  normalized_list="$(normalize_super_admin_emails "${1:-}")"
+  normalized_email="$(normalize_super_admin_email "${2:-}")"
+
+  if [[ -z "$normalized_email" ]]; then
+    printf '%s\n' "$normalized_list"
+    return
+  fi
+
+  case ",${normalized_list}," in
+    *",$normalized_email,"*)
+      printf '%s\n' "$normalized_list"
+      ;;
+    *)
+      if [[ -n "$normalized_list" ]]; then
+        printf '%s,%s\n' "$normalized_list" "$normalized_email"
+      else
+        printf '%s\n' "$normalized_email"
+      fi
+      ;;
+  esac
 }
 
 generate_secret() {
@@ -694,15 +783,21 @@ detect_deploy_host() {
 
 load_or_generate_env() {
   local env_file="${REPO_DIR}/.env"
+  local state_file
+  state_file="$(get_state_file_path)"
 
-  FRONTEND_PORT="$(read_env_value "$env_file" "FRONTEND_PORT")"
-  BACKEND_PORT="$(read_env_value "$env_file" "BACKEND_PORT")"
-  MYSQL_PORT="$(read_env_value "$env_file" "MYSQL_PORT")"
-  MYSQL_ROOT_PASSWORD="$(read_env_value "$env_file" "MYSQL_ROOT_PASSWORD")"
-  MYSQL_PASSWORD="$(read_env_value "$env_file" "MYSQL_PASSWORD")"
-  MYSQL_USER="$(read_env_value "$env_file" "MYSQL_USER")"
-  MYSQL_DATABASE="$(read_env_value "$env_file" "MYSQL_DATABASE")"
-  JWT_SECRET="$(read_env_value "$env_file" "JWT_SECRET")"
+  FRONTEND_PORT="$(read_preferred_env_value "$state_file" "$env_file" "FRONTEND_PORT")"
+  BACKEND_PORT="$(read_preferred_env_value "$state_file" "$env_file" "BACKEND_PORT")"
+  MYSQL_PORT="$(read_preferred_env_value "$state_file" "$env_file" "MYSQL_PORT")"
+  MYSQL_ROOT_PASSWORD="$(read_preferred_env_value "$state_file" "$env_file" "MYSQL_ROOT_PASSWORD")"
+  MYSQL_PASSWORD="$(read_preferred_env_value "$state_file" "$env_file" "MYSQL_PASSWORD")"
+  MYSQL_USER="$(read_preferred_env_value "$state_file" "$env_file" "MYSQL_USER")"
+  MYSQL_DATABASE="$(read_preferred_env_value "$state_file" "$env_file" "MYSQL_DATABASE")"
+  JWT_SECRET="$(read_preferred_env_value "$state_file" "$env_file" "JWT_SECRET")"
+  SUPER_ADMIN_EMAILS="$(read_preferred_env_value "$state_file" "$env_file" "SUPER_ADMIN_EMAILS")"
+  SUPER_ADMIN_BOOTSTRAP_EMAIL="$(read_preferred_env_value "$state_file" "$env_file" "SUPER_ADMIN_BOOTSTRAP_EMAIL")"
+  SUPER_ADMIN_BOOTSTRAP_PASSWORD="$(read_preferred_env_value "$state_file" "$env_file" "SUPER_ADMIN_BOOTSTRAP_PASSWORD")"
+  SUPER_ADMIN_BOOTSTRAP_NICKNAME="$(read_preferred_env_value "$state_file" "$env_file" "SUPER_ADMIN_BOOTSTRAP_NICKNAME")"
 
   [[ -n "$FRONTEND_PORT" ]] || FRONTEND_PORT="$(choose_available_port 80 4871 8080 18080)"
   [[ -n "$BACKEND_PORT" ]] || BACKEND_PORT="$(choose_available_port 3001 13001 23001)"
@@ -712,6 +807,16 @@ load_or_generate_env() {
   [[ -n "$MYSQL_USER" ]] || MYSQL_USER="$DEFAULT_DB_USER"
   [[ -n "$MYSQL_DATABASE" ]] || MYSQL_DATABASE="$DEFAULT_DB_NAME"
   [[ -n "$JWT_SECRET" ]] || JWT_SECRET="$(generate_secret)"
+  SUPER_ADMIN_BOOTSTRAP_EMAIL="$(normalize_super_admin_email "${SUPER_ADMIN_BOOTSTRAP_EMAIL:-admin@gmail.com}")"
+  [[ -n "$SUPER_ADMIN_BOOTSTRAP_EMAIL" ]] || SUPER_ADMIN_BOOTSTRAP_EMAIL="admin@gmail.com"
+  [[ -n "$SUPER_ADMIN_BOOTSTRAP_NICKNAME" ]] || SUPER_ADMIN_BOOTSTRAP_NICKNAME="系统管理员"
+  if [[ -n "$SUPER_ADMIN_BOOTSTRAP_PASSWORD" ]]; then
+    SUPER_ADMIN_PASSWORD_GENERATED=0
+  else
+    SUPER_ADMIN_BOOTSTRAP_PASSWORD="$(generate_secret)"
+    SUPER_ADMIN_PASSWORD_GENERATED=1
+  fi
+  SUPER_ADMIN_EMAILS="$(ensure_super_admin_email_in_list "$SUPER_ADMIN_EMAILS" "$SUPER_ADMIN_BOOTSTRAP_EMAIL")"
 
   PUBLIC_API_ORIGIN="$(build_http_origin "$DEPLOY_HOST" "$BACKEND_PORT")/api"
   WEB_PUBLIC_ORIGIN="$(build_http_origin "$DEPLOY_HOST" "$FRONTEND_PORT")"
@@ -732,6 +837,28 @@ load_or_generate_env() {
   fi
 }
 
+write_state_file() {
+  local state_file
+  state_file="$(get_state_file_path)"
+
+  mkdir -p "$(dirname "$state_file")"
+  cat >"$state_file" <<EOF
+FRONTEND_PORT=${FRONTEND_PORT}
+BACKEND_PORT=${BACKEND_PORT}
+MYSQL_PORT=${MYSQL_PORT}
+MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+MYSQL_DATABASE=${MYSQL_DATABASE}
+MYSQL_USER=${MYSQL_USER}
+MYSQL_PASSWORD=${MYSQL_PASSWORD}
+JWT_SECRET=${JWT_SECRET}
+SUPER_ADMIN_EMAILS=${SUPER_ADMIN_EMAILS}
+SUPER_ADMIN_BOOTSTRAP_EMAIL=${SUPER_ADMIN_BOOTSTRAP_EMAIL}
+SUPER_ADMIN_BOOTSTRAP_PASSWORD=${SUPER_ADMIN_BOOTSTRAP_PASSWORD}
+SUPER_ADMIN_BOOTSTRAP_NICKNAME=${SUPER_ADMIN_BOOTSTRAP_NICKNAME}
+EOF
+  chmod 600 "$state_file" 2>/dev/null || true
+}
+
 write_env_files() {
   cat >"${REPO_DIR}/.env" <<EOF
 TZ=${DEFAULT_TIMEZONE}
@@ -748,6 +875,10 @@ DATABASE_NAME=${MYSQL_DATABASE}
 DB_SYNCHRONIZE=true
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRATION=7d
+SUPER_ADMIN_EMAILS=${SUPER_ADMIN_EMAILS}
+SUPER_ADMIN_BOOTSTRAP_EMAIL=${SUPER_ADMIN_BOOTSTRAP_EMAIL}
+SUPER_ADMIN_BOOTSTRAP_PASSWORD=${SUPER_ADMIN_BOOTSTRAP_PASSWORD}
+SUPER_ADMIN_BOOTSTRAP_NICKNAME=${SUPER_ADMIN_BOOTSTRAP_NICKNAME}
 PUBLIC_API_ORIGIN=${PUBLIC_API_ORIGIN}
 WEB_PUBLIC_ORIGIN=${WEB_PUBLIC_ORIGIN}
 CORS_ORIGINS=${CORS_ORIGINS}
@@ -771,7 +902,10 @@ DATABASE_NAME=${MYSQL_DATABASE}
 DB_SYNCHRONIZE=true
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRATION=7d
-SUPER_ADMIN_EMAILS=
+SUPER_ADMIN_EMAILS=${SUPER_ADMIN_EMAILS}
+SUPER_ADMIN_BOOTSTRAP_EMAIL=${SUPER_ADMIN_BOOTSTRAP_EMAIL}
+SUPER_ADMIN_BOOTSTRAP_PASSWORD=${SUPER_ADMIN_BOOTSTRAP_PASSWORD}
+SUPER_ADMIN_BOOTSTRAP_NICKNAME=${SUPER_ADMIN_BOOTSTRAP_NICKNAME}
 PORT=3001
 CORS_ORIGINS=${CORS_ORIGINS}
 PUBLIC_API_ORIGIN=${PUBLIC_API_ORIGIN}
@@ -818,6 +952,8 @@ KUAISHOU_QUALITY_PROBE_TIMEOUT_MS=6000
 KUAISHOU_QUALITY_PROBE_INTERVAL_MS=120
 KUAISHOU_QUALITY_PROBE_SAMPLE_BYTES=65536
 EOF
+
+  write_state_file
 }
 
 wait_for_container_ready() {
@@ -839,6 +975,59 @@ wait_for_container_ready() {
   return 1
 }
 
+mysql_login_with_current_app_credentials() {
+  compose_cmd --profile with-mysql exec -T mysql \
+    sh -lc 'MYSQL_PWD="${MYSQL_PASSWORD}" mysql -u"${MYSQL_USER}" -D "${MYSQL_DATABASE}" -Nse "SELECT 1;"' >/dev/null 2>&1
+}
+
+mysql_login_with_current_root_credentials() {
+  compose_cmd --profile with-mysql exec -T mysql \
+    sh -lc 'MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" mysql -uroot -Nse "SELECT 1;"' >/dev/null 2>&1
+}
+
+reconcile_mysql_app_credentials() {
+  compose_cmd --profile with-mysql exec -T mysql \
+    sh -lc 'MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" mysql -uroot <<SQL
+CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\`;
+CREATE USER IF NOT EXISTS '\''${MYSQL_USER}'\''@'\''%'\'' IDENTIFIED BY '\''${MYSQL_PASSWORD}'\'';
+ALTER USER '\''${MYSQL_USER}'\''@'\''%'\'' IDENTIFIED BY '\''${MYSQL_PASSWORD}'\'';
+GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '\''${MYSQL_USER}'\''@'\''%'\'';
+FLUSH PRIVILEGES;
+SQL'
+}
+
+ensure_mysql_credentials() {
+  local timeout_seconds="${1:-120}"
+  local elapsed=0
+  local did_reconcile=0
+
+  while (( elapsed < timeout_seconds )); do
+    if mysql_login_with_current_app_credentials; then
+      if [[ "$did_reconcile" -eq 1 ]]; then
+        log_success '已自动同步 MySQL 应用账号密码。'
+      fi
+      return 0
+    fi
+
+    if mysql_login_with_current_root_credentials; then
+      if [[ "$did_reconcile" -eq 0 ]]; then
+        log_warn '检测到 MySQL 应用账号与当前配置不一致，正在自动同步数据库账号密码。'
+        did_reconcile=1
+      fi
+      reconcile_mysql_app_credentials
+    fi
+
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  if mysql_login_with_current_root_credentials; then
+    die 'MySQL Root 凭据可用，但自动同步应用账号后仍无法登录，请执行 docker compose logs mysql 查看详细信息。'
+  fi
+
+  die '检测到现有 MySQL 数据卷中的凭据与当前配置不一致，且当前 Root 密码无法验证。为避免误删已有数据，脚本已停止。若确认可重置数据，请先备份并删除 mysql_data 卷后重试。'
+}
+
 deploy_stack() {
   cd "$REPO_DIR"
 
@@ -847,6 +1036,7 @@ deploy_stack() {
   if ! wait_for_container_ready "v-save-mysql" 180; then
     die 'MySQL 容器启动超时，请执行 docker compose logs mysql 查看原因。'
   fi
+  ensure_mysql_credentials
   log_success 'MySQL 容器已就绪。'
 
   log_info '开始构建并启动后端与前端容器...'
@@ -861,16 +1051,7 @@ deploy_stack() {
   log_success '前后端容器已全部启动。'
 }
 
-query_user_count() {
-  compose_cmd --profile with-mysql exec -T mysql \
-    mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -Nse "SELECT COUNT(*) FROM ${MYSQL_DATABASE}.users;" 2>/dev/null || printf '0\n'
-}
-
 show_summary() {
-  local user_count
-  user_count="$(query_user_count | tr -d '\r\n[:space:]')"
-  [[ -n "$user_count" ]] || user_count="0"
-
   printf '\n'
   printf '========================================\n'
   printf '        %s 部署完成\n' "$PROJECT_NAME"
@@ -882,13 +1063,16 @@ show_summary() {
   printf '数据库用户名：%s\n' "$MYSQL_USER"
   printf '数据库密码：%s\n' "$MYSQL_PASSWORD"
   printf '数据库 Root 密码：%s\n' "$MYSQL_ROOT_PASSWORD"
+  printf '超级管理员邮箱：%s\n' "$SUPER_ADMIN_BOOTSTRAP_EMAIL"
+  if [[ "$SUPER_ADMIN_PASSWORD_GENERATED" -eq 1 ]]; then
+    printf '超级管理员初始密码：%s\n' "$SUPER_ADMIN_BOOTSTRAP_PASSWORD"
+    printf '提示：该密码只在首次初始化时会写入数据库，请登录后尽快修改。\n'
+  else
+    printf '超级管理员密码：本次未重置，已保留现有初始化配置，出于安全考虑不再明文输出。\n'
+  fi
+  printf '注册入口默认状态：关闭，可在“后台管理 -> 系统设置”中手动开启。\n'
   printf '配置文件位置：%s/.env\n' "$REPO_DIR"
   printf '\n'
-  if [[ "$user_count" == "0" ]]; then
-    printf '友好提示：当前数据库还是空的，第一个注册用户会自动设置为超级管理员。\n'
-  else
-    printf '友好提示：当前数据库中已有 %s 个用户，“第一个注册用户自动成为超级管理员”规则只在全新空库时生效。\n' "$user_count"
-  fi
   printf '如果你需要查看容器状态，请执行：cd %s && docker compose --profile with-mysql ps\n' "$REPO_DIR"
   printf '========================================\n'
 }
