@@ -7,7 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-export type AuthHealthPlatform = 'bilibili' | 'douyin';
+export type AuthHealthPlatform = 'bilibili' | 'douyin' | 'kuaishou';
 export type AuthHealthState = 'unknown' | 'healthy' | 'degraded' | 'invalid';
 
 @Entity('auth_health_status')
@@ -43,4 +43,3 @@ export class AuthHealthStatus {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

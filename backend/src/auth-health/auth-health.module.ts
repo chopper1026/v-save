@@ -5,6 +5,7 @@ import { AuthHealthService } from './auth-health.service';
 import { AuthHealthController } from './auth-health.controller';
 import { BilibiliAuthModule } from '../bilibili-auth/bilibili-auth.module';
 import { DouyinAuthModule } from '../douyin-auth/douyin-auth.module';
+import { KuaishouAuthModule } from '../kuaishou-auth/kuaishou-auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -12,6 +13,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     TypeOrmModule.forFeature([AuthHealthStatus]),
     BilibiliAuthModule,
     DouyinAuthModule,
+    KuaishouAuthModule,
     NotificationsModule,
   ],
   providers: [AuthHealthService],
@@ -19,4 +21,3 @@ import { NotificationsModule } from '../notifications/notifications.module';
   exports: [AuthHealthService],
 })
 export class AuthHealthModule {}
-

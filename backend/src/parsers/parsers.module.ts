@@ -7,6 +7,7 @@ import { KuaishouParser } from './kuaishou.parser';
 import { YoutubeParser } from './youtube.parser';
 import { BilibiliAuthModule } from '../bilibili-auth/bilibili-auth.module';
 import { DouyinAuthModule } from '../douyin-auth/douyin-auth.module';
+import { KuaishouAuthModule } from '../kuaishou-auth/kuaishou-auth.module';
 import { DouyinOfficialModule } from '../douyin-official/douyin-official.module';
 import { DouyinOptimizationModule } from '../douyin-optimization/douyin-optimization.module';
 import { DouyinQualityModule } from '../douyin-quality/douyin-quality.module';
@@ -18,6 +19,7 @@ import { DouyinQualityModule } from '../douyin-quality/douyin-quality.module';
   imports: [
     BilibiliAuthModule,
     DouyinAuthModule,
+    KuaishouAuthModule,
     DouyinOfficialModule,
     DouyinOptimizationModule,
     DouyinQualityModule,

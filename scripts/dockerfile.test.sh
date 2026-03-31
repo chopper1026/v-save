@@ -50,16 +50,20 @@ main() {
 
   assert_contains "$runner_block" "python3" "backend runner 阶段必须安装 python3，供 Douyin Python helper 运行"
   assert_contains "$runner_block" "ffmpeg" "backend runner 阶段必须保留 ffmpeg 运行时"
-  assert_contains "$runner_block" "yt-dlp" "backend runner 阶段必须保留 yt-dlp 运行时"
-  assert_contains "$runner_block" "chromium" "backend runner 阶段必须保留 Chromium，避免快手解析回归"
+  assert_contains "$runner_block" "YTDLP_DOWNLOAD_URL" "backend runner 阶段必须提供 yt-dlp 官方二进制下载地址"
+  assert_contains "$runner_block" "/usr/local/bin/yt-dlp" "backend runner 阶段必须将 yt-dlp 官方二进制安装到 PATH 中"
+  assert_contains "$runner_block" "chmod +x /usr/local/bin/yt-dlp" "backend runner 阶段必须赋予 yt-dlp 官方二进制执行权限"
   assert_contains "$runner_block" "COPY --from=builder /app/node_modules ./node_modules" "backend runner 阶段必须复用 builder 裁剪后的生产依赖"
   assert_contains "$runner_block" "COPY --from=builder /opt/douyin-python /opt/douyin-python" "backend runner 阶段必须复用 builder 构建好的 Python venv"
   assert_contains "$runner_block" "CMD [\"node\", \"dist/main\"]" "backend runner 阶段必须直接运行构建产物，避免经由 npm 启动"
   assert_not_contains "$runner_block" "npm ci --omit=dev" "backend runner 阶段不应再次安装生产依赖"
+  assert_not_contains "$runner_block" "chromium" "backend runner 阶段不应再保留 Chromium 运行时依赖"
+  assert_not_contains "$runner_block" "PUPPETEER_EXECUTABLE_PATH" "backend runner 阶段不应再注入 Chromium 可执行路径"
   assert_not_contains "$runner_block" "make" "backend runner 阶段不应保留 make"
   assert_not_contains "$runner_block" "g++" "backend runner 阶段不应保留 g++"
   assert_not_contains "$runner_block" "python3-venv" "backend runner 阶段不应保留 python3-venv"
   assert_not_contains "$runner_block" "curl" "backend runner 阶段不应保留未使用的 curl"
+  assert_not_contains "$runner_block" "apt-get install -y --fix-missing --no-install-recommends \\\n    ffmpeg \\\n    yt-dlp" "backend runner 阶段不应继续从 apt 安装过旧的 yt-dlp 包"
 
   printf 'dockerfile 测试通过。\n'
 }

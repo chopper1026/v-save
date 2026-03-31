@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 
 export type AdminAuditModule = 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY' | 'SYSTEM';
-export type AdminAuditPlatform = 'BILIBILI' | 'DOUYIN' | 'NONE';
+export type AdminAuditPlatform = 'BILIBILI' | 'DOUYIN' | 'KUAISHOU' | 'NONE';
 export type AdminAuditTargetType = 'USER' | 'AUTH_SESSION' | 'SYSTEM';
 
 @Entity('user_admin_audit_logs')

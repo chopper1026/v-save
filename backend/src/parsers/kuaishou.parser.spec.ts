@@ -3,6 +3,9 @@ import { ParserFailureError } from './parser-failure.error';
 
 describe('KuaishouParser', () => {
   let parser: KuaishouParser;
+  let kuaishouAuthService: {
+    getCookieHeader: jest.Mock;
+  };
   const originalEnv = process.env;
 
   beforeEach(() => {
@@ -17,7 +20,18 @@ describe('KuaishouParser', () => {
       KUAISHOU_QUALITY_PROBE_ENABLED: 'false',
     };
     jest.restoreAllMocks();
-    parser = new KuaishouParser();
+    kuaishouAuthService = {
+      getCookieHeader: jest.fn().mockResolvedValue(
+        [
+          'did=web_123',
+          'clientid=3',
+          'kpf=PC_WEB',
+          'kpn=KUAISHOU_VISION',
+          'kuaishou.server.web_st=secure-token',
+        ].join('; '),
+      ),
+    };
+    parser = new (KuaishouParser as any)(kuaishouAuthService);
   });
 
   afterEach(() => {
@@ -51,8 +65,12 @@ describe('KuaishouParser', () => {
       .mockResolvedValue(
         'https://www.kuaishou.com/short-video/photo_text_1?shareToken=abc',
       );
+    expect(typeof (parser as any).fetchVisionVideoDetailViaGraphql).toBe('function');
+    if (typeof (parser as any).fetchVisionVideoDetailViaGraphql !== 'function') {
+      return;
+    }
     jest
-      .spyOn(parser as any, 'fetchVisionVideoDetailFromBrowser')
+      .spyOn(parser as any, 'fetchVisionVideoDetailViaGraphql')
       .mockResolvedValue({
         status: 1,
         author: { name: '文本作者' },
@@ -88,6 +106,7 @@ describe('KuaishouParser', () => {
     expect(result.platform).toBe('kuaishou');
     expect(result.videoUrl).toBe('https://example.com/video.mp4');
     expect(resolveShareUrlSpy).toHaveBeenCalledWith('https://v.kuaishou.com/K4URZPj1');
+    expect(kuaishouAuthService.getCookieHeader).toHaveBeenCalledTimes(1);
   });
 
   it('sanitizes title by removing kuaishou account id suffix in mention', async () => {
@@ -283,8 +302,12 @@ describe('KuaishouParser', () => {
       'https://www.kuaishou.com/short-video/photo_cache_1?shareToken=abc',
     );
 
+    expect(typeof (parser as any).fetchVisionVideoDetailViaGraphql).toBe('function');
+    if (typeof (parser as any).fetchVisionVideoDetailViaGraphql !== 'function') {
+      return;
+    }
     const fetchSpy = jest
-      .spyOn(parser as any, 'fetchVisionVideoDetailFromBrowser')
+      .spyOn(parser as any, 'fetchVisionVideoDetailViaGraphql')
       .mockResolvedValue({
         status: 1,
         author: { name: '缓存作者' },
@@ -326,8 +349,12 @@ describe('KuaishouParser', () => {
     jest.spyOn(parser as any, 'resolveShareUrl').mockResolvedValue(
       'https://www.kuaishou.com/short-video/photo_risk_1?shareToken=abc',
     );
+    expect(typeof (parser as any).fetchVisionVideoDetailViaGraphql).toBe('function');
+    if (typeof (parser as any).fetchVisionVideoDetailViaGraphql !== 'function') {
+      return;
+    }
     const fetchSpy = jest
-      .spyOn(parser as any, 'fetchVisionVideoDetailFromBrowser')
+      .spyOn(parser as any, 'fetchVisionVideoDetailViaGraphql')
       .mockRejectedValue(
         new ParserFailureError({
           code: 'KUAISHOU_RISK_CONTROL',
@@ -358,16 +385,50 @@ describe('KuaishouParser', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('closes browser resource on module destroy', async () => {
-    const close = jest.fn(async () => undefined);
-    (parser as any).browser = {
-      close,
-      isConnected: jest.fn(() => true),
-    };
+  it('falls back to html payload when graphql detail is empty', async () => {
+    jest.spyOn(parser as any, 'sleep').mockResolvedValue(undefined);
+    jest.spyOn(parser as any, 'resolveShareUrl').mockResolvedValue(
+      'https://www.kuaishou.com/short-video/photo_html_1?shareToken=abc',
+    );
+    expect(typeof (parser as any).fetchVisionVideoDetailViaGraphql).toBe('function');
+    expect(typeof (parser as any).fetchVisionVideoDetailFromHtml).toBe('function');
+    if (
+      typeof (parser as any).fetchVisionVideoDetailViaGraphql !== 'function' ||
+      typeof (parser as any).fetchVisionVideoDetailFromHtml !== 'function'
+    ) {
+      return;
+    }
 
-    await (parser as any).onModuleDestroy();
+    jest
+      .spyOn(parser as any, 'fetchVisionVideoDetailViaGraphql')
+      .mockResolvedValue(null);
+    const htmlFallbackSpy = jest
+      .spyOn(parser as any, 'fetchVisionVideoDetailFromHtml')
+      .mockResolvedValue({
+        status: 1,
+        author: { name: 'HTML 兜底作者' },
+        photo: {
+          id: 'photo_html_1',
+          caption: 'HTML 兜底成功',
+          coverUrl: 'https://example.com/cover.jpg',
+          duration: 8000,
+          photoUrl: 'https://example.com/html-fallback.mp4',
+        },
+      });
 
-    expect(close).toHaveBeenCalledTimes(1);
-    expect((parser as any).browser).toBeNull();
+    const result = await parser.parse('https://www.kuaishou.com/f/html123');
+
+    expect(result.videoUrl).toBe('https://example.com/html-fallback.mp4');
+    expect(htmlFallbackSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws auth required when kuaishou cookie is missing', async () => {
+    kuaishouAuthService.getCookieHeader.mockResolvedValueOnce('');
+
+    await expect(
+      parser.parse('https://www.kuaishou.com/f/no-cookie'),
+    ).rejects.toMatchObject({
+      code: 'KUAISHOU_AUTH_REQUIRED',
+    });
   });
 });

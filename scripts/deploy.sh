@@ -34,6 +34,9 @@ SUPER_ADMIN_BOOTSTRAP_EMAIL=""
 SUPER_ADMIN_BOOTSTRAP_PASSWORD=""
 SUPER_ADMIN_BOOTSTRAP_NICKNAME=""
 SUPER_ADMIN_PASSWORD_GENERATED=0
+DEPLOY_DURATION_SECONDS=""
+BACKEND_IMAGE_SIZE=""
+FRONTEND_IMAGE_SIZE=""
 PUBLIC_API_ORIGIN=""
 WEB_PUBLIC_ORIGIN=""
 CORS_ORIGINS=""
@@ -167,14 +170,17 @@ normalize_super_admin_email() {
 
 normalize_super_admin_emails() {
   local raw="${1:-}"
-  local entries=()
-  local normalized_entries=()
+  local -a entries=()
+  local -a normalized_entries=()
   local seen=","
   local entry=""
   local IFS=','
-  read -r -a entries <<< "$raw"
 
-  for entry in "${entries[@]}"; do
+  if [[ -n "$raw" ]]; then
+    read -r -a entries <<< "$raw"
+  fi
+
+  for entry in ${entries[@]+"${entries[@]}"}; do
     entry="$(normalize_super_admin_email "$entry")"
     [[ -n "$entry" ]] || continue
     case "$seen" in
@@ -188,11 +194,83 @@ normalize_super_admin_emails() {
   done
 
   local joined=""
-  for entry in "${normalized_entries[@]}"; do
+  for entry in ${normalized_entries[@]+"${normalized_entries[@]}"}; do
     joined="${joined:+${joined},}${entry}"
   done
 
   printf '%s\n' "$joined"
+}
+
+format_duration_seconds() {
+  local seconds="${1:-}"
+
+  if [[ ! "$seconds" =~ ^[0-9]+$ ]]; then
+    printf '未获取\n'
+    return
+  fi
+
+  printf '%s 秒' "$seconds"
+  if (( seconds >= 60 )); then
+    printf '（%d 分 %d 秒）' "$((seconds / 60))" "$((seconds % 60))"
+  fi
+  printf '\n'
+}
+
+format_bytes_human() {
+  local bytes="${1:-}"
+
+  if [[ ! "$bytes" =~ ^[0-9]+$ ]]; then
+    printf '未获取\n'
+    return
+  fi
+
+  awk -v bytes="$bytes" '
+    BEGIN {
+      split("B KB MB GB TB PB", units, " ");
+      value = bytes + 0;
+      unit_index = 1;
+      while (value >= 1024 && unit_index < 6) {
+        value /= 1024;
+        unit_index++;
+      }
+
+      if (unit_index == 1) {
+        printf "%d%s\n", value, units[unit_index];
+        exit;
+      }
+
+      if (value >= 100) {
+        printf "%.0f%s\n", value, units[unit_index];
+        exit;
+      }
+
+      if (value >= 10) {
+        printf "%.1f%s\n", value, units[unit_index];
+        exit;
+      }
+
+      printf "%.2f%s\n", value, units[unit_index];
+    }
+  '
+}
+
+read_container_image_size() {
+  local container_name="$1"
+  local image_id=""
+  local image_bytes=""
+
+  image_id="$(docker_cmd inspect -f '{{.Image}}' "$container_name" 2>/dev/null || true)"
+  [[ -n "$image_id" ]] || return 1
+
+  image_bytes="$(docker_cmd image inspect "$image_id" --format '{{.Size}}' 2>/dev/null || true)"
+  [[ "$image_bytes" =~ ^[0-9]+$ ]] || return 1
+
+  format_bytes_human "$image_bytes"
+}
+
+capture_deploy_artifacts() {
+  BACKEND_IMAGE_SIZE="$(read_container_image_size "v-save-backend" || true)"
+  FRONTEND_IMAGE_SIZE="$(read_container_image_size "v-save-frontend" || true)"
 }
 
 ensure_super_admin_email_in_list() {
@@ -916,8 +994,6 @@ YTDLP_PATH=yt-dlp
 YTDLP_CONCURRENT_FRAGMENTS=4
 DOUYIN_ABOGUS_PYTHON=python3
 DOUYIN_ABOGUS_HELPER_PATH=/app/tools/douyin/abogus.py
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-KUAISHOU_CHROME_PATH=/usr/bin/chromium
 YOUTUBE_NOEMBED_ENABLED=true
 DOWNLOAD_TASK_RETENTION_MS=21600000
 DOWNLOAD_TASK_CLEANUP_INTERVAL_MS=600000
@@ -936,10 +1012,7 @@ DOUYIN_DOWNLOAD_PROBE_CACHE_TTL_MS=45000
 DOUYIN_DOWNLOAD_PROBE_LINES=4,3,2,1,0
 DOUYIN_STRICT_PROBE_CONCURRENCY=2
 DOUYIN_STRICT_PROBE_BUDGET_MS=12000
-KUAISHOU_BROWSER_HEADLESS=true
 KUAISHOU_BROWSER_USER_AGENT=
-KUAISHOU_BROWSER_IDLE_TTL_MS=30000
-KUAISHOU_BROWSER_SETTLE_MS=1200
 KUAISHOU_PARSE_MIN_INTERVAL_MS=4000
 KUAISHOU_PARSE_CACHE_TTL_MS=900000
 KUAISHOU_PARSE_MAX_ATTEMPTS=2
@@ -1030,6 +1103,10 @@ ensure_mysql_credentials() {
 
 deploy_stack() {
   cd "$REPO_DIR"
+  local deploy_started_at=0
+  local deploy_finished_at=0
+
+  deploy_started_at="$(date +%s)"
 
   log_info '启动 MySQL 容器...'
   compose_cmd --profile with-mysql up -d mysql
@@ -1048,6 +1125,9 @@ deploy_stack() {
   if ! wait_for_container_ready "v-save-frontend" 180; then
     die '前端容器启动超时，请执行 docker compose logs frontend 查看原因。'
   fi
+  deploy_finished_at="$(date +%s)"
+  DEPLOY_DURATION_SECONDS="$((deploy_finished_at - deploy_started_at))"
+  capture_deploy_artifacts
   log_success '前后端容器已全部启动。'
 }
 
@@ -1070,6 +1150,9 @@ show_summary() {
   else
     printf '超级管理员密码：本次未重置，已保留现有初始化配置，出于安全考虑不再明文输出。\n'
   fi
+  printf '本次部署耗时：%s\n' "$(format_duration_seconds "$DEPLOY_DURATION_SECONDS" | tr -d '\n')"
+  printf '后端镜像大小：%s\n' "${BACKEND_IMAGE_SIZE:-未获取}"
+  printf '前端镜像大小：%s\n' "${FRONTEND_IMAGE_SIZE:-未获取}"
   printf '注册入口默认状态：关闭，可在“后台管理 -> 系统设置”中手动开启。\n'
   printf '配置文件位置：%s/.env\n' "$REPO_DIR"
   printf '\n'

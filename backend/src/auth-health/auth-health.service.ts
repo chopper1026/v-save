@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BilibiliAuthService } from '../bilibili-auth/bilibili-auth.service';
 import { DouyinAuthService } from '../douyin-auth/douyin-auth.service';
+import { KuaishouAuthService } from '../kuaishou-auth/kuaishou-auth.service';
 import {
   NotificationLevel,
   NotificationsService,
@@ -73,6 +74,7 @@ export class AuthHealthService implements OnModuleInit, OnModuleDestroy {
     private readonly authHealthRepository: Repository<AuthHealthStatus>,
     private readonly bilibiliAuthService: BilibiliAuthService,
     private readonly douyinAuthService: DouyinAuthService,
+    private readonly kuaishouAuthService: KuaishouAuthService,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -131,6 +133,15 @@ export class AuthHealthService implements OnModuleInit, OnModuleDestroy {
         lastSuccessAt: null,
         lastFailureAt: null,
       },
+      kuaishou: mapped.kuaishou || {
+        platform: 'kuaishou',
+        status: 'unknown',
+        consecutiveFailures: 0,
+        lastError: null,
+        lastCheckedAt: null,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+      },
     };
 
     return {
@@ -166,7 +177,7 @@ export class AuthHealthService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (platform === 'douyin' && category === 'risk_control') {
+    if (category === 'risk_control') {
       await this.markFailure(platform, message, 'degraded', 'COOKIE_RISK');
       return;
     }
@@ -184,6 +195,7 @@ export class AuthHealthService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.checkBilibili();
       await this.checkDouyin();
+      await this.checkKuaishou();
       this.logger.log(`登录态健康检查完成: trigger=${trigger}`);
     } catch (error: any) {
       this.logger.warn(`登录态健康检查失败: ${error?.message || 'unknown'}`);
@@ -269,6 +281,52 @@ export class AuthHealthService implements OnModuleInit, OnModuleDestroy {
       .touchSessionCheckTime()
       .catch(() => undefined);
     await this.markHealthy('douyin');
+  }
+
+  private async checkKuaishou() {
+    const status = await this.kuaishouAuthService.getStatus();
+    if (!status.hasCookie) {
+      await this.markFailure(
+        'kuaishou',
+        '未配置快手 Cookie，请先扫码登录',
+        'invalid',
+        'COOKIE_EXPIRED',
+      );
+      return;
+    }
+
+    const cookieHeader = await this.kuaishouAuthService.getCookieHeader();
+    const cookieMap = this.parseCookieHeader(cookieHeader);
+    if (!cookieMap['kuaishou.server.web_st']) {
+      await this.kuaishouAuthService
+        .recordCheckError('快手 Cookie 缺少 kuaishou.server.web_st，可能已失效')
+        .catch(() => undefined);
+      await this.markFailure(
+        'kuaishou',
+        '快手 Cookie 缺少 kuaishou.server.web_st，可能已失效',
+        'invalid',
+        'COOKIE_EXPIRED',
+      );
+      return;
+    }
+
+    if (status.lastError) {
+      await this.kuaishouAuthService
+        .recordCheckError(status.lastError)
+        .catch(() => undefined);
+      await this.markFailure(
+        'kuaishou',
+        status.lastError,
+        'degraded',
+        'COOKIE_RISK',
+      );
+      return;
+    }
+
+    await this.kuaishouAuthService
+      .touchSessionCheckTime()
+      .catch(() => undefined);
+    await this.markHealthy('kuaishou');
   }
 
   private async markHealthy(platform: AuthHealthPlatform): Promise<void> {
@@ -384,11 +442,17 @@ export class AuthHealthService implements OnModuleInit, OnModuleDestroy {
   }
 
   private getPlatformLabel(platform: AuthHealthPlatform): string {
-    return platform === 'bilibili' ? 'B站' : '抖音';
+    if (platform === 'bilibili') {
+      return 'B站';
+    }
+    if (platform === 'douyin') {
+      return '抖音';
+    }
+    return '快手';
   }
 
   private isSupportedPlatform(platform?: string | null): platform is AuthHealthPlatform {
-    return platform === 'bilibili' || platform === 'douyin';
+    return platform === 'bilibili' || platform === 'douyin' || platform === 'kuaishou';
   }
 
   private readIntegerEnv(name: string, fallback: number): number {
