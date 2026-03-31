@@ -84,6 +84,23 @@ main() {
   unset V_SAVE_DOCKER_INSTALL_SCRIPT_URL_CN
   unset V_SAVE_DOCKER_INSTALL_MIRROR_CN
 
+  assert_eq \
+    "$(get_docker_repo_root_url)" \
+    "https://mirror.azure.cn/docker-ce/linux" \
+    "中国大陆环境应使用 Docker 中国镜像仓库根地址"
+  assert_eq \
+    "$(get_docker_rpm_repo_url fedora)" \
+    "https://mirror.azure.cn/docker-ce/linux/fedora/docker-ce.repo" \
+    "Fedora 应使用 fedora RPM 仓库地址"
+  assert_eq \
+    "$(get_docker_rpm_repo_url rocky)" \
+    "https://mirror.azure.cn/docker-ce/linux/centos/docker-ce.repo" \
+    "RHEL 系发行版应默认复用 centos RPM 仓库地址"
+  assert_eq \
+    "$(get_docker_packages)" \
+    "docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin" \
+    "Docker 安装包列表应与官方文档保持一致，不应包含额外插件"
+
   PROJECT_NAME="V-SAVE"
   WEB_PUBLIC_ORIGIN="http://demo.example.com"
   PUBLIC_API_ORIGIN="http://demo.example.com/api"
