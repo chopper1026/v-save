@@ -101,6 +101,10 @@ main() {
     "docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin" \
     "Docker 安装包列表应与官方文档保持一致，不应包含额外插件"
 
+  FORCE_REFRESH_REPO=0
+  parse_args --refresh-repo
+  assert_eq "$FORCE_REFRESH_REPO" "1" "--refresh-repo 应开启仓库刷新开关"
+
   local temp_repo
   temp_repo="$(mktemp -d)"
   mkdir -p "$temp_repo/backend"
@@ -120,6 +124,64 @@ main() {
   assert_eq "$APT_SECURITY_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/debian-security" "中国大陆环境下的 Debian Security 镜像应默认使用 HTTP"
   assert_eq "$ALPINE_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/alpine" "中国大陆环境下的 Alpine 镜像应默认使用 HTTP"
   rm -rf "$temp_repo"
+
+  local archive_root reuse_target reuse_marker
+  archive_root="$(mktemp -d)"
+  reuse_target="${archive_root}/v-save"
+  reuse_marker="${archive_root}/download-called"
+  mkdir -p "${reuse_target}/backend" "${reuse_target}/frontend"
+  : > "${reuse_target}/docker-compose.yml"
+  USER_INSTALL_DIR="$reuse_target"
+  FORCE_REFRESH_REPO=0
+  REPO_DIR=""
+  has_cmd() {
+    if [[ "$1" == "git" ]]; then
+      return 1
+    fi
+    command -v "$1" >/dev/null 2>&1
+  }
+  download_repo_archive() {
+    : > "$reuse_marker"
+  }
+  pushd "$archive_root" >/dev/null
+  ensure_repo_checkout
+  popd >/dev/null
+  assert_eq "$REPO_DIR" "$reuse_target" "无 git 且已有解压仓库时应默认复用现有目录"
+  if [[ -f "$reuse_marker" ]]; then
+    printf '断言失败：默认复用已有解压仓库时不应重新下载压缩包。\n' >&2
+    exit 1
+  fi
+  rm -rf "$archive_root"
+
+  local refresh_root refresh_target refresh_marker
+  refresh_root="$(mktemp -d)"
+  refresh_target="${refresh_root}/v-save"
+  refresh_marker="${refresh_root}/download-called"
+  mkdir -p "${refresh_target}/backend" "${refresh_target}/frontend"
+  printf 'old-root-env\n' > "${refresh_target}/.env"
+  printf 'old-backend-env\n' > "${refresh_target}/backend/.env"
+  : > "${refresh_target}/docker-compose.yml"
+  USER_INSTALL_DIR="$refresh_target"
+  FORCE_REFRESH_REPO=1
+  REPO_DIR=""
+  download_repo_archive() {
+    local target_dir="$1"
+    rm -rf "$target_dir"
+    mkdir -p "${target_dir}/backend" "${target_dir}/frontend"
+    : > "${target_dir}/docker-compose.yml"
+    : > "$refresh_marker"
+  }
+  pushd "$refresh_root" >/dev/null
+  ensure_repo_checkout
+  popd >/dev/null
+  assert_eq "$REPO_DIR" "$refresh_target" "显式刷新仓库后应继续使用同一安装目录"
+  assert_eq "$(cat "${refresh_target}/.env")" "old-root-env" "刷新压缩包时应保留根目录 .env"
+  assert_eq "$(cat "${refresh_target}/backend/.env")" "old-backend-env" "刷新压缩包时应保留 backend/.env"
+  if [[ ! -f "$refresh_marker" ]]; then
+    printf '断言失败：显式刷新仓库时应重新下载压缩包。\n' >&2
+    exit 1
+  fi
+  rm -rf "$refresh_root"
 
   PROJECT_NAME="V-SAVE"
   WEB_PUBLIC_ORIGIN="http://demo.example.com"
