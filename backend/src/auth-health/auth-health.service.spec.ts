@@ -27,10 +27,11 @@ describe('AuthHealthService', () => {
       recordCheckError: jest.fn().mockResolvedValue(undefined),
     };
 
-    const service = new AuthHealthService(
+    const service = new (AuthHealthService as any)(
       repository as any,
       {} as any,
       douyinAuthService as any,
+      {} as any,
       notificationsService as any,
     );
 
@@ -54,10 +55,11 @@ describe('AuthHealthService', () => {
       recordCheckError: jest.fn().mockResolvedValue(undefined),
     };
 
-    const service = new AuthHealthService(
+    const service = new (AuthHealthService as any)(
       repository as any,
       {} as any,
       douyinAuthService as any,
+      {} as any,
       notificationsService as any,
     );
 
@@ -73,8 +75,9 @@ describe('AuthHealthService', () => {
     const repository = createRepositoryMock();
     const notificationsService = createNotificationsMock();
 
-    const service = new AuthHealthService(
+    const service = new (AuthHealthService as any)(
       repository as any,
+      {} as any,
       {} as any,
       {} as any,
       notificationsService as any,
@@ -94,8 +97,9 @@ describe('AuthHealthService', () => {
     const repository = createRepositoryMock();
     const notificationsService = createNotificationsMock();
 
-    const service = new AuthHealthService(
+    const service = new (AuthHealthService as any)(
       repository as any,
+      {} as any,
       {} as any,
       {} as any,
       notificationsService as any,
@@ -115,8 +119,9 @@ describe('AuthHealthService', () => {
     const repository = createRepositoryMock();
     const notificationsService = createNotificationsMock();
 
-    const service = new AuthHealthService(
+    const service = new (AuthHealthService as any)(
       repository as any,
+      {} as any,
       {} as any,
       {} as any,
       notificationsService as any,
@@ -144,8 +149,9 @@ describe('AuthHealthService', () => {
     const repository = createRepositoryMock();
     const notificationsService = createNotificationsMock();
 
-    const service = new AuthHealthService(
+    const service = new (AuthHealthService as any)(
       repository as any,
+      {} as any,
       {} as any,
       {} as any,
       notificationsService as any,
@@ -173,8 +179,9 @@ describe('AuthHealthService', () => {
     const repository = createRepositoryMock();
     const notificationsService = createNotificationsMock();
 
-    const service = new AuthHealthService(
+    const service = new (AuthHealthService as any)(
       repository as any,
+      {} as any,
       {} as any,
       {} as any,
       notificationsService as any,
@@ -203,8 +210,9 @@ describe('AuthHealthService', () => {
     const repository = createRepositoryMock();
     const notificationsService = createNotificationsMock();
 
-    const service = new AuthHealthService(
+    const service = new (AuthHealthService as any)(
       repository as any,
+      {} as any,
       {} as any,
       {} as any,
       notificationsService as any,
@@ -219,5 +227,67 @@ describe('AuthHealthService', () => {
         actionUrl: '/admin?tab=auth',
       }),
     );
+  });
+
+  it('touches kuaishou session check time when periodic check is healthy', async () => {
+    const repository = createRepositoryMock();
+    const notificationsService = createNotificationsMock();
+
+    const kuaishouAuthService = {
+      getStatus: jest.fn().mockResolvedValue({
+        hasCookie: true,
+        lastError: null,
+      }),
+      getCookieHeader: jest.fn().mockResolvedValue(
+        'did=web_123; clientid=3; kpf=PC_WEB; kpn=KUAISHOU_VISION; kuaishou.server.web_st=secure-token',
+      ),
+      touchSessionCheckTime: jest.fn().mockResolvedValue(undefined),
+      recordCheckError: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new (AuthHealthService as any)(
+      repository as any,
+      {} as any,
+      {} as any,
+      kuaishouAuthService as any,
+      notificationsService as any,
+    );
+
+    await (service as any).checkKuaishou();
+
+    expect(kuaishouAuthService.touchSessionCheckTime).toHaveBeenCalledTimes(1);
+    expect(kuaishouAuthService.recordCheckError).not.toHaveBeenCalled();
+  });
+
+  it('records kuaishou session check error when secure token cookie is missing', async () => {
+    const repository = createRepositoryMock();
+    const notificationsService = createNotificationsMock();
+
+    const kuaishouAuthService = {
+      getStatus: jest.fn().mockResolvedValue({
+        hasCookie: true,
+        lastError: null,
+      }),
+      getCookieHeader: jest.fn().mockResolvedValue(
+        'did=web_123; clientid=3; kpf=PC_WEB; kpn=KUAISHOU_VISION',
+      ),
+      touchSessionCheckTime: jest.fn().mockResolvedValue(undefined),
+      recordCheckError: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new (AuthHealthService as any)(
+      repository as any,
+      {} as any,
+      {} as any,
+      kuaishouAuthService as any,
+      notificationsService as any,
+    );
+
+    await (service as any).checkKuaishou();
+
+    expect(kuaishouAuthService.recordCheckError).toHaveBeenCalledWith(
+      expect.stringContaining('web_st'),
+    );
+    expect(kuaishouAuthService.touchSessionCheckTime).not.toHaveBeenCalled();
   });
 });

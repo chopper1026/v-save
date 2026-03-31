@@ -57,8 +57,6 @@ services:
       WEB_PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN:-http://localhost:4871}
       FFMPEG_PATH: ${FFMPEG_PATH:-ffmpeg}
       YTDLP_PATH: ${YTDLP_PATH:-yt-dlp}
-      PUPPETEER_EXECUTABLE_PATH: ${PUPPETEER_EXECUTABLE_PATH:-/usr/bin/chromium}
-      KUAISHOU_CHROME_PATH: ${KUAISHOU_CHROME_PATH:-/usr/bin/chromium}
       NODE_OPTIONS: ${NODE_OPTIONS:---max-old-space-size=768 --dns-result-order=ipv4first}
       TZ: ${TZ:-Asia/Shanghai}
     mem_limit: 1536m
@@ -66,7 +64,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"require('http').get('http://127.0.0.1:3001/api',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))\"",
+          "node -e \"require('http').get('http://127.0.0.1:3001/api/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\"",
         ]
       interval: 20s
       timeout: 5s

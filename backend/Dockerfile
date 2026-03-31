@@ -24,7 +24,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
       fi; \
     fi \
  && apt-get -o Acquire::Retries=5 update \
- && apt-get install -y --no-install-recommends \
+ && apt-get -o Acquire::Retries=5 install -y --fix-missing --no-install-recommends \
     ca-certificates \
     python3 \
     python3-venv \
@@ -55,6 +55,7 @@ FROM node:20-bookworm-slim AS runner
 
 ARG APT_MIRROR=
 ARG APT_SECURITY_MIRROR=
+ARG YTDLP_DOWNLOAD_URL=https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
 WORKDIR /app
 
 RUN if [ -n "$APT_MIRROR" ]; then \
@@ -72,38 +73,13 @@ RUN if [ -n "$APT_MIRROR" ]; then \
       fi; \
     fi \
  && apt-get -o Acquire::Retries=5 update \
- && apt-get install -y --fix-missing --no-install-recommends \
+ && apt-get -o Acquire::Retries=5 install -y --fix-missing --no-install-recommends \
     ffmpeg \
-    yt-dlp \
-    chromium \
     python3 \
     ca-certificates \
     tzdata \
-    fonts-freefont-ttf \
-    fonts-noto-color-emoji \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgbm1 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxkbcommon0 \
-    libxrandr2 \
+ && python3 -c "import os, urllib.request; urllib.request.urlretrieve(os.environ['YTDLP_DOWNLOAD_URL'], '/usr/local/bin/yt-dlp')" \
+ && chmod +x /usr/local/bin/yt-dlp \
  && rm -rf /var/lib/apt/lists/* \
  && rm -rf /usr/share/doc/* /usr/share/man/* /tmp/* \
  && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
@@ -119,10 +95,9 @@ ENV NODE_ENV=production
 ENV PORT=3001
 ENV TZ=Asia/Shanghai
 ENV FFMPEG_PATH=ffmpeg
-ENV YTDLP_PATH=yt-dlp
+ENV YTDLP_PATH=/usr/local/bin/yt-dlp
 ENV PATH=/opt/douyin-python/bin:$PATH
 ENV DOUYIN_ABOGUS_HELPER_PATH=/app/tools/douyin/abogus.py
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 EXPOSE 3001
 

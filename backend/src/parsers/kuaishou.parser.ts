@@ -1,8 +1,8 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { VideoDownloadOptions, VideoParser, VideoInfo } from './base.interface';
 import { ParserFailureError } from './parser-failure.error';
-import { resolveChromeExecutablePath } from '../config/executable-paths';
+import { KuaishouAuthService } from '../kuaishou-auth/kuaishou-auth.service';
 
 interface KuaishouRepresentation {
   id?: number;
@@ -72,12 +72,13 @@ type KuaishouProbeResult =
 /**
  * 快手视频解析器
  * 新版实现说明：
- * - 通过浏览器上下文请求 GraphQL `visionVideoDetail` 获取稳定详情
+ * - 通过快手 Cookie 直连 GraphQL `visionVideoDetail` 获取稳定详情
+ * - GraphQL 返回空时回退 HTML `__APOLLO_STATE__`
  * - 引入串行队列 + 节流 + 缓存 + 冷却，降低频繁访问触发风控概率
  * - 构建多档画质映射并对候选线路做测速，提升下载稳定性
  */
 @Injectable()
-export class KuaishouParser implements VideoParser, OnModuleDestroy {
+export class KuaishouParser implements VideoParser {
   private readonly logger = new Logger(KuaishouParser.name);
   platform: VideoInfo['platform'] = 'kuaishou';
 
@@ -106,14 +107,6 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
     'KUAISHOU_RISK_COOLDOWN_MS',
     10 * 60 * 1000,
   );
-  private readonly browserIdleTtlMs = this.readIntegerEnv(
-    'KUAISHOU_BROWSER_IDLE_TTL_MS',
-    30 * 1000,
-  );
-  private readonly browserSettleMs = this.readIntegerEnv(
-    'KUAISHOU_BROWSER_SETTLE_MS',
-    1200,
-  );
   private readonly qualityProbeEnabled = (process.env.KUAISHOU_QUALITY_PROBE_ENABLED || 'true') !== 'false';
   private readonly qualityProbeTimeoutMs = this.readIntegerEnv(
     'KUAISHOU_QUALITY_PROBE_TIMEOUT_MS',
@@ -130,7 +123,6 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
   private readonly userAgent =
     process.env.KUAISHOU_BROWSER_USER_AGENT ||
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
-  private readonly browserHeadless = (process.env.KUAISHOU_BROWSER_HEADLESS || 'true') !== 'false';
 
   private parseQueue: Promise<void> = Promise.resolve();
   private lastParseStartedAt = 0;
@@ -141,9 +133,7 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
     { expiresAt: number; info: VideoInfo }
   >();
 
-  private browser: any | null = null;
-  private browserLaunchPromise: Promise<any> | null = null;
-  private browserIdleTimer: NodeJS.Timeout | null = null;
+  constructor(private readonly kuaishouAuthService: KuaishouAuthService) {}
 
   /**
    * 判断是否支持该URL
@@ -161,10 +151,6 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
    */
   async parse(url: string): Promise<VideoInfo> {
     return this.runSerialized(async () => this.parseInternal(url));
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    await this.closeBrowser();
   }
 
   private async parseInternal(url: string): Promise<VideoInfo> {
@@ -202,6 +188,11 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
       return cached;
     }
 
+    const cookieHeader = await this.kuaishouAuthService.getCookieHeader();
+    if (!cookieHeader) {
+      throw this.createAuthRequiredError('未配置快手登录态，请先在后台扫码登录快手');
+    }
+
     this.ensureNotInCooldown();
     await this.enforceRequestPacing();
 
@@ -209,10 +200,29 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
       this.ensureNotInCooldown();
       try {
-        const detail = await this.fetchVisionVideoDetailFromBrowser(
-          resolvedUrl || normalizedInput,
-          photoId,
-        );
+        const detail =
+          (await this.fetchVisionVideoDetailViaGraphql(
+            resolvedUrl || normalizedInput,
+            photoId,
+            cookieHeader,
+          )) ||
+          (await this.fetchVisionVideoDetailFromHtml(
+            resolvedUrl || normalizedInput,
+            photoId,
+            cookieHeader,
+          ));
+        if (!detail) {
+          throw new ParserFailureError({
+            code: 'KUAISHOU_PARSE_EMPTY_DETAIL',
+            message: '快手视频详情为空，请稍后重试',
+            category: 'parse_failed',
+            retryable: true,
+            platform: 'kuaishou',
+            details: {
+              photoId,
+            },
+          });
+        }
         const info = await this.buildVideoInfoFromVisionDetail(detail);
         this.onParseSuccess(photoId, info);
         return info;
@@ -440,106 +450,58 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
       return directMatched[1];
     }
 
+    const shareMatched = url.match(/\/f\/([^/?&#]+)/i);
+    if (shareMatched?.[1]) {
+      return shareMatched[1];
+    }
+
     return '';
   }
 
   /**
-   * 浏览器上下文请求 visionVideoDetail
+   * 使用登录 Cookie 直连 GraphQL 获取 visionVideoDetail
    */
-  private async fetchVisionVideoDetailFromBrowser(
+  private async fetchVisionVideoDetailViaGraphql(
     shareUrl: string,
     photoId: string,
-  ): Promise<KuaishouVisionVideoDetail> {
-    const browser = await this.acquireBrowser();
-    const page = await browser.newPage();
+    cookieHeader: string,
+  ): Promise<KuaishouVisionVideoDetail | null> {
     let responsePayload: any;
 
     try {
-      await page.setUserAgent(this.userAgent);
-      await page.setExtraHTTPHeaders({
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-      });
-
-      await page.goto(shareUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 45000,
-      });
-      if (this.browserSettleMs > 0) {
-        await this.sleep(this.browserSettleMs);
-      }
-
-      responsePayload = await page.evaluate(async (targetPhotoId) => {
-        const query = `
-          query visionVideoDetail($photoId: String, $type: String, $page: String, $webPageArea: String) {
-            visionVideoDetail(photoId: $photoId, type: $type, page: $page, webPageArea: $webPageArea) {
-              status
-              author {
-                name
-              }
-              photo {
-                id
-                duration
-                caption
-                coverUrl
-                photoUrl
-                photoH265Url
-                manifest {
-                  adaptationSet {
-                    representation {
-                      id
-                      defaultSelect
-                      backupUrl
-                      url
-                      height
-                      width
-                      avgBitrate
-                      maxBitrate
-                      qualityType
-                      qualityLabel
-                    }
-                  }
-                }
-                videoResource
-              }
-            }
-          }
-        `;
-        const variables = {
-          photoId: targetPhotoId,
-          page: 'detail',
-        };
-
-        const response = await fetch('/graphql', {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'content-type': 'application/json',
+      const response = await axios.post(
+        'https://www.kuaishou.com/graphql',
+        {
+          operationName: 'visionVideoDetail',
+          variables: {
+            photoId,
+            page: 'detail',
           },
-          body: JSON.stringify({
-            operationName: 'visionVideoDetail',
-            variables,
-            query,
-          }),
-        });
+          query: this.createVisionDetailQuery(),
+        },
+        {
+          timeout: 30000,
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': this.userAgent,
+            Cookie: cookieHeader,
+            Referer: shareUrl || 'https://www.kuaishou.com/',
+            Origin: 'https://www.kuaishou.com',
+            Accept: 'application/json, text/plain, */*',
+          },
+          validateStatus: () => true,
+        },
+      );
 
-        const text = await response.text();
-        let data: any = null;
-        try {
-          data = JSON.parse(text);
-        } catch (_error) {
-          data = null;
-        }
-
-        return {
-          status: response.status,
-          data,
-          textSnippet: String(text || '').slice(0, 1200),
-        };
-      }, photoId);
+      responsePayload = {
+        status: response.status,
+        data: response.data,
+        textSnippet: JSON.stringify(response.data || {}).slice(0, 1200),
+      };
     } catch (error: any) {
       throw new ParserFailureError({
-        code: 'KUAISHOU_BROWSER_FETCH_FAILED',
-        message: '快手详情页加载失败，请稍后重试',
+        code: 'KUAISHOU_GRAPHQL_FETCH_FAILED',
+        message: '快手详情请求失败，请稍后重试',
         category: 'upstream',
         retryable: true,
         platform: 'kuaishou',
@@ -547,9 +509,6 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
           cause: error?.message || 'unknown',
         },
       });
-    } finally {
-      await page.close().catch(() => undefined);
-      this.scheduleBrowserIdleClose();
     }
 
     const responseStatus = Number(responsePayload?.status) || 0;
@@ -575,20 +534,19 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
       });
     }
 
-    const detail = payload?.data?.visionVideoDetail;
-    if (!detail || !detail?.photo?.id) {
-      throw new ParserFailureError({
-        code: 'KUAISHOU_PARSE_EMPTY_DETAIL',
-        message: '快手视频详情为空，请稍后重试',
-        category: 'parse_failed',
-        retryable: true,
-        platform: 'kuaishou',
-        details: {
+    if ([401, 403].includes(responseStatus)) {
+      throw this.createAuthRequiredError(
+        '快手 Cookie 可能已失效，请重新扫码登录',
+        {
           status: responseStatus,
           errors: errorMessages,
-          bodySnippet: payloadSnippet,
         },
-      });
+      );
+    }
+
+    const detail = payload?.data?.visionVideoDetail;
+    if (!detail || !detail?.photo?.id) {
+      return null;
     }
 
     const status = Number(detail?.status);
@@ -606,6 +564,255 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
     }
 
     return detail;
+  }
+
+  private async fetchVisionVideoDetailFromHtml(
+    shareUrl: string,
+    photoId: string,
+    cookieHeader: string,
+  ): Promise<KuaishouVisionVideoDetail | null> {
+    let response: any;
+    try {
+      response = await axios.get(shareUrl, {
+        timeout: 30000,
+        headers: {
+          'User-Agent': this.userAgent,
+          Cookie: cookieHeader,
+          Referer: 'https://www.kuaishou.com/',
+          Origin: 'https://www.kuaishou.com',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        validateStatus: () => true,
+      });
+    } catch (error: any) {
+      throw new ParserFailureError({
+        code: 'KUAISHOU_HTML_FETCH_FAILED',
+        message: '快手详情页加载失败，请稍后重试',
+        category: 'upstream',
+        retryable: true,
+        platform: 'kuaishou',
+        details: {
+          cause: error?.message || 'unknown',
+        },
+      });
+    }
+
+    const responseStatus = Number(response?.status) || 0;
+    const html = String(response?.data || '');
+    const htmlSnippet = html.slice(0, 1200);
+
+    if (this.isKuaishouRiskControlPayload(null, '', htmlSnippet)) {
+      throw new ParserFailureError({
+        code: 'KUAISHOU_RISK_CONTROL',
+        message: '快手触发风控校验，请稍后重试',
+        category: 'risk_control',
+        retryable: true,
+        platform: 'kuaishou',
+        details: {
+          status: responseStatus,
+          bodySnippet: htmlSnippet,
+        },
+      });
+    }
+
+    if ([401, 403].includes(responseStatus)) {
+      throw this.createAuthRequiredError(
+        '快手 Cookie 可能已失效，请重新扫码登录',
+        {
+          status: responseStatus,
+        },
+      );
+    }
+
+    const apolloState = this.extractApolloStateFromHtml(html);
+    if (!apolloState) {
+      return null;
+    }
+
+    const detail = this.buildVisionDetailFromApolloState(apolloState, photoId);
+    if (!detail?.photo?.id) {
+      return null;
+    }
+
+    const detailStatus = Number(detail?.status);
+    if (Number.isFinite(detailStatus) && detailStatus !== 1) {
+      throw new ParserFailureError({
+        code: 'KUAISHOU_VIDEO_UNAVAILABLE',
+        message: '该快手视频当前不可访问（可能已删除、私密或地区限制）',
+        category: 'video_unavailable',
+        retryable: false,
+        platform: 'kuaishou',
+        details: {
+          detailStatus,
+        },
+      });
+    }
+
+    return detail;
+  }
+
+  private createVisionDetailQuery(): string {
+    return `
+      query visionVideoDetail($photoId: String, $type: String, $page: String, $webPageArea: String) {
+        visionVideoDetail(photoId: $photoId, type: $type, page: $page, webPageArea: $webPageArea) {
+          status
+          author {
+            name
+          }
+          photo {
+            id
+            duration
+            caption
+            coverUrl
+            photoUrl
+            photoH265Url
+            manifest {
+              adaptationSet {
+                representation {
+                  id
+                  defaultSelect
+                  backupUrl
+                  url
+                  height
+                  width
+                  avgBitrate
+                  maxBitrate
+                  qualityType
+                  qualityLabel
+                }
+              }
+            }
+            videoResource
+          }
+        }
+      }
+    `;
+  }
+
+  private extractApolloStateFromHtml(html: string): Record<string, any> | null {
+    const markers = [
+      'window.__APOLLO_STATE__=',
+      'window.__APOLLO_STATE__ =',
+      'window.__APOLO_STATE__=',
+      'window.__APOLO_STATE__ =',
+    ];
+
+    for (const marker of markers) {
+      const parsed = this.extractJsonObjectAfterMarker(html, marker);
+      if (parsed) {
+        return parsed;
+      }
+    }
+
+    return null;
+  }
+
+  private extractJsonObjectAfterMarker(
+    source: string,
+    marker: string,
+  ): Record<string, any> | null {
+    const markerIndex = source.indexOf(marker);
+    if (markerIndex === -1) {
+      return null;
+    }
+
+    const startIndex = source.indexOf('{', markerIndex + marker.length);
+    if (startIndex === -1) {
+      return null;
+    }
+
+    let depth = 0;
+    let inString = false;
+    let isEscaped = false;
+
+    for (let i = startIndex; i < source.length; i += 1) {
+      const char = source[i];
+
+      if (inString) {
+        if (isEscaped) {
+          isEscaped = false;
+          continue;
+        }
+        if (char === '\\') {
+          isEscaped = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (char === '{') {
+        depth += 1;
+        continue;
+      }
+
+      if (char === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          const jsonText = source.slice(startIndex, i + 1);
+          try {
+            return JSON.parse(jsonText);
+          } catch (_error) {
+            return null;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private buildVisionDetailFromApolloState(
+    apolloState: Record<string, any>,
+    photoId: string,
+  ): KuaishouVisionVideoDetail | null {
+    const photoKey =
+      Object.keys(apolloState).find((key) => key === `VisionVideoDetailPhoto:${photoId}`) ||
+      Object.keys(apolloState).find((key) => key.endsWith(`:${photoId}`));
+    if (!photoKey) {
+      return null;
+    }
+
+    const photo = apolloState[photoKey];
+    if (!photo || typeof photo !== 'object') {
+      return null;
+    }
+
+    const authorRef =
+      photo?.author?.__ref ||
+      photo?.user?.__ref ||
+      photo?.owner?.__ref ||
+      null;
+    const author = authorRef ? apolloState[authorRef] : null;
+
+    return {
+      status: Number(photo?.status) || 1,
+      author: {
+        name: String(
+          author?.name ||
+            author?.user_name ||
+            photo?.author?.name ||
+            '',
+        ).trim(),
+      },
+      photo: {
+        id: String(photo?.id || photoId).trim(),
+        caption: String(photo?.caption || '').trim(),
+        coverUrl: String(photo?.coverUrl || photo?.cover_url || '').trim(),
+        duration: Number(photo?.duration) || 0,
+        photoUrl: String(photo?.photoUrl || photo?.photo_url || '').trim(),
+        photoH265Url: String(photo?.photoH265Url || photo?.photo_h265_url || '').trim(),
+        manifest: photo?.manifest || undefined,
+        videoResource: photo?.videoResource || photo?.video_resource || undefined,
+      },
+    };
   }
 
   private isKuaishouRiskControlPayload(
@@ -1360,109 +1567,17 @@ export class KuaishouParser implements VideoParser, OnModuleDestroy {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private async loadPuppeteer(): Promise<any> {
-    try {
-      return await import('puppeteer-core');
-    } catch (_error) {
-      throw new ParserFailureError({
-        code: 'KUAISHOU_PUPPETEER_MISSING',
-        message: '缺少 puppeteer-core 依赖，无法解析快手视频',
-        category: 'parse_failed',
-        retryable: false,
-        platform: 'kuaishou',
-      });
-    }
-  }
-
-  private resolveChromeExecutablePath(): string {
-    return resolveChromeExecutablePath({
-      envCandidates: [
-        process.env.KUAISHOU_CHROME_PATH?.trim(),
-        process.env.PUPPETEER_EXECUTABLE_PATH?.trim(),
-      ],
+  private createAuthRequiredError(
+    message: string,
+    details?: Record<string, any>,
+  ): ParserFailureError {
+    return new ParserFailureError({
+      code: 'KUAISHOU_AUTH_REQUIRED',
+      message,
+      category: 'upstream',
+      retryable: false,
+      platform: 'kuaishou',
+      details,
     });
-  }
-
-  private async acquireBrowser(): Promise<any> {
-    const current = this.browser;
-    if (current && typeof current.isConnected === 'function' && current.isConnected()) {
-      if (this.browserIdleTimer) {
-        clearTimeout(this.browserIdleTimer);
-        this.browserIdleTimer = null;
-      }
-      return current;
-    }
-
-    if (this.browserLaunchPromise) {
-      return this.browserLaunchPromise;
-    }
-
-    this.browserLaunchPromise = (async () => {
-      const puppeteer = await this.loadPuppeteer();
-      const executablePath = this.resolveChromeExecutablePath();
-      if (!executablePath) {
-        throw new ParserFailureError({
-          code: 'KUAISHOU_CHROME_NOT_FOUND',
-          message: '未找到可用 Chrome，请安装 Chrome 或配置 KUAISHOU_CHROME_PATH',
-          category: 'parse_failed',
-          retryable: false,
-          platform: 'kuaishou',
-        });
-      }
-
-      const browser = await puppeteer.launch({
-        executablePath,
-        headless: this.browserHeadless ? 'new' : false,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      });
-
-      browser.on('disconnected', () => {
-        this.browser = null;
-      });
-
-      this.browser = browser;
-      return browser;
-    })();
-
-    try {
-      return await this.browserLaunchPromise;
-    } finally {
-      this.browserLaunchPromise = null;
-    }
-  }
-
-  private scheduleBrowserIdleClose(): void {
-    if (this.browserIdleTtlMs <= 0) {
-      void this.closeBrowser();
-      return;
-    }
-
-    if (this.browserIdleTimer) {
-      clearTimeout(this.browserIdleTimer);
-      this.browserIdleTimer = null;
-    }
-
-    this.browserIdleTimer = setTimeout(() => {
-      void this.closeBrowser();
-    }, this.browserIdleTtlMs);
-  }
-
-  private async closeBrowser(): Promise<void> {
-    if (this.browserIdleTimer) {
-      clearTimeout(this.browserIdleTimer);
-      this.browserIdleTimer = null;
-    }
-
-    const current = this.browser;
-    this.browser = null;
-    if (!current) {
-      return;
-    }
-
-    try {
-      await current.close();
-    } catch (_error) {
-      // ignore close errors
-    }
   }
 }

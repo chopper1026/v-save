@@ -26,6 +26,23 @@ export interface DouyinAuthStatus {
   cookiePreview: string | null
 }
 
+export interface KuaishouAuthStatus {
+  hasCookie: boolean
+  source: 'database' | 'environment' | 'none'
+  userId: string | null
+  lastError: string | null
+  lastCheckAt: string | null
+  updatedAt: string | null
+}
+
+export interface KuaishouQrCodePayload {
+  qrLoginToken: string
+  qrLoginSignature: string
+  qrUrl: string
+  imageDataUrl: string
+  expireAt: string
+}
+
 export type DouyinBridgeFlowStatus =
   | 'waiting_helper'
   | 'browser_opened'
@@ -53,7 +70,7 @@ export interface DouyinBridgeStatusPayload {
 }
 
 export interface AuthHealthPlatformStatus {
-  platform: 'bilibili' | 'douyin'
+  platform: 'bilibili' | 'douyin' | 'kuaishou'
   status: 'unknown' | 'healthy' | 'degraded' | 'invalid'
   consecutiveFailures: number
   lastError: string | null
@@ -121,6 +138,17 @@ export const getBilibiliSourceLabel = (source?: BilibiliAuthStatus['source']) =>
 }
 
 export const getDouyinSourceLabel = (source?: DouyinAuthStatus['source']) => {
+  switch (source) {
+    case 'database':
+      return '数据库（扫码或手动维护）'
+    case 'environment':
+      return '环境变量'
+    default:
+      return '未配置'
+  }
+}
+
+export const getKuaishouSourceLabel = (source?: KuaishouAuthStatus['source']) => {
   switch (source) {
     case 'database':
       return '数据库（扫码或手动维护）'

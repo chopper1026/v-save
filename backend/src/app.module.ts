@@ -8,11 +8,13 @@ import { DownloadModule } from './download/download.module';
 import { ProxyModule } from './proxy/proxy.module';
 import { BilibiliAuthModule } from './bilibili-auth/bilibili-auth.module';
 import { DouyinAuthModule } from './douyin-auth/douyin-auth.module';
+import { KuaishouAuthModule } from './kuaishou-auth/kuaishou-auth.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AuthHealthModule } from './auth-health/auth-health.module';
 import { AdminUsersModule } from './admin/admin-users.module';
 import { RuntimeMonitorModule } from './runtime-monitor/runtime-monitor.module';
 import { SystemSettingsModule } from './system-settings/system-settings.module';
+import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
@@ -40,6 +42,7 @@ import { SystemSettingsModule } from './system-settings/system-settings.module';
     AuthModule,
     BilibiliAuthModule,
     DouyinAuthModule,
+    KuaishouAuthModule,
     ParsersModule,
     DownloadModule,
     ProxyModule,
@@ -47,7 +50,7 @@ import { SystemSettingsModule } from './system-settings/system-settings.module';
     AuthHealthModule,
     AdminUsersModule,
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [],
 })
 export class AppModule {}

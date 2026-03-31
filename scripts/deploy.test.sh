@@ -319,6 +319,9 @@ EOF
   SUPER_ADMIN_BOOTSTRAP_EMAIL="admin@gmail.com"
   SUPER_ADMIN_BOOTSTRAP_PASSWORD="bootstrap-secret"
   SUPER_ADMIN_PASSWORD_GENERATED=1
+  DEPLOY_DURATION_SECONDS=1574
+  BACKEND_IMAGE_SIZE="1.93GB"
+  FRONTEND_IMAGE_SIZE="94.7MB"
   REPO_DIR="/tmp/v-save"
 
   local summary
@@ -330,6 +333,9 @@ EOF
   assert_contains "$summary" "超级管理员邮箱：admin@gmail.com" "部署摘要应显示超管邮箱"
   assert_contains "$summary" "超级管理员初始密码：bootstrap-secret" "首次生成超管密码时应在摘要中回显一次"
   assert_contains "$summary" "注册入口默认状态：关闭" "部署摘要应提示注册入口默认关闭"
+  assert_contains "$summary" "本次部署耗时：1574 秒" "部署摘要应显示本次部署耗时"
+  assert_contains "$summary" "后端镜像大小：1.93GB" "部署摘要应显示后端镜像大小"
+  assert_contains "$summary" "前端镜像大小：94.7MB" "部署摘要应显示前端镜像大小"
 
   SUPER_ADMIN_PASSWORD_GENERATED=0
   summary="$(show_summary)"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import BilibiliAuthPanel from './auth/BilibiliAuthPanel'
 import DouyinAuthPanel from './auth/DouyinAuthPanel'
+import KuaishouAuthPanel from './auth/KuaishouAuthPanel'
 import {
   type AuthHealthPlatformStatus,
   type BilibiliAuthStatus,
@@ -12,6 +13,7 @@ import {
   getHealthStatusLabel,
 } from './auth/auth-management-shared'
 import { useDouyinAuthManager } from '../hooks/useDouyinAuthManager'
+import { useKuaishouAuthManager } from '../hooks/useKuaishouAuthManager'
 
 export default function AdminAuthManagement() {
   const [bilibiliStatus, setBilibiliStatus] = useState<BilibiliAuthStatus | null>(null)
@@ -21,7 +23,7 @@ export default function AdminAuthManagement() {
   const [isLoadingBilibiliStatus, setIsLoadingBilibiliStatus] = useState(false)
   const [isSubmittingBilibiliAction, setIsSubmittingBilibiliAction] = useState(false)
 
-  const [authHealth, setAuthHealth] = useState<Record<'bilibili' | 'douyin', AuthHealthPlatformStatus> | null>(null)
+  const [authHealth, setAuthHealth] = useState<Record<'bilibili' | 'douyin' | 'kuaishou', AuthHealthPlatformStatus> | null>(null)
   const [isLoadingAuthHealth, setIsLoadingAuthHealth] = useState(false)
 
   const bilibiliPollTimerRef = useRef<number | null>(null)
@@ -62,6 +64,7 @@ export default function AdminAuthManagement() {
         setAuthHealth({
           bilibili: platforms.bilibili as AuthHealthPlatformStatus,
           douyin: platforms.douyin as AuthHealthPlatformStatus,
+          kuaishou: platforms.kuaishou as AuthHealthPlatformStatus,
         })
       }
     } catch (err) {
@@ -129,6 +132,23 @@ export default function AdminAuthManagement() {
     saveCookie: handleSaveDouyinCookie,
     clearSession: handleClearDouyinSession,
   } = useDouyinAuthManager({
+    onAuthHealthRefresh: fetchAuthHealth,
+  })
+
+  const {
+    status: kuaishouStatus,
+    qrCode: kuaishouQrCode,
+    cookieInput: kuaishouCookieInput,
+    setCookieInput: setKuaishouCookieInput,
+    message: kuaishouMessage,
+    error: kuaishouError,
+    isLoadingStatus: isLoadingKuaishouStatus,
+    isSubmitting: isSubmittingKuaishouAction,
+    sourceLabel: kuaishouSourceLabel,
+    generateQr: handleGenerateKuaishouQr,
+    saveCookie: handleSaveKuaishouCookie,
+    clearSession: handleClearKuaishouSession,
+  } = useKuaishouAuthManager({
     onAuthHealthRefresh: fetchAuthHealth,
   })
 
@@ -213,27 +233,33 @@ export default function AdminAuthManagement() {
     }
   }
 
+  const configuredAuthCount = [bilibiliStatus?.hasCookie, douyinStatus?.hasCookie, kuaishouStatus?.hasCookie]
+    .filter(Boolean)
+    .length
+
   return (
     <div className="bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.06)] p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold text-text-primary">登录态管理</h3>
           <p className="text-sm text-text-secondary mt-1">
-            当前已接入 B 站与抖音，可在此统一维护下载所需登录态
+            当前已接入 B 站、抖音与快手，可在此统一维护下载所需登录态
           </p>
         </div>
         <span
           className={`px-3 py-1 rounded-full text-xs font-medium ${
-            bilibiliStatus?.hasCookie
+            configuredAuthCount > 0
               ? 'bg-emerald-100 text-emerald-700'
               : 'bg-gray-100 text-gray-600'
           }`}
         >
-          {isLoadingBilibiliStatus ? '检查中...' : bilibiliStatus?.hasCookie ? 'B站已登录' : 'B站未登录'}
+          {isLoadingBilibiliStatus || isLoadingDouyinStatus || isLoadingKuaishouStatus
+            ? '检查中...'
+            : `已配置 ${configuredAuthCount}/3`}
         </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="px-4 py-3 rounded-xl bg-gray-50/70 border border-gray-100">
           <div className="flex items-center justify-between">
             <p className="text-sm text-text-secondary">B站健康状态</p>
@@ -254,6 +280,17 @@ export default function AdminAuthManagement() {
           </div>
           <p className="text-xs text-text-secondary mt-2">
             最近检查：{formatDateTime(authHealth?.douyin?.lastCheckedAt || null)}
+          </p>
+        </div>
+        <div className="px-4 py-3 rounded-xl bg-gray-50/70 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-text-secondary">快手健康状态</p>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getHealthStatusClass(authHealth?.kuaishou?.status)}`}>
+              {isLoadingAuthHealth ? '检查中' : getHealthStatusLabel(authHealth?.kuaishou?.status)}
+            </span>
+          </div>
+          <p className="text-xs text-text-secondary mt-2">
+            最近检查：{formatDateTime(authHealth?.kuaishou?.lastCheckedAt || null)}
           </p>
         </div>
       </div>
@@ -288,6 +325,21 @@ export default function AdminAuthManagement() {
         onStartBridgeLogin={handleStartDouyinBridgeLogin}
         onSaveCookie={handleSaveDouyinCookie}
         onClearSession={handleClearDouyinSession}
+      />
+
+      <KuaishouAuthPanel
+        status={kuaishouStatus}
+        isLoadingStatus={isLoadingKuaishouStatus}
+        sourceLabel={kuaishouSourceLabel}
+        qrCode={kuaishouQrCode}
+        message={kuaishouMessage}
+        error={kuaishouError}
+        isSubmitting={isSubmittingKuaishouAction}
+        cookieInput={kuaishouCookieInput}
+        onGenerateQr={handleGenerateKuaishouQr}
+        onCookieInputChange={setKuaishouCookieInput}
+        onSaveCookie={handleSaveKuaishouCookie}
+        onClearSession={handleClearKuaishouSession}
       />
     </div>
   )
