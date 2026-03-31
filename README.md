@@ -37,6 +37,15 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh)
 ```
 
+如果这条命令长时间没有任何输出，通常不是 `deploy.sh` 本身卡住，而是服务器访问 `raw.githubusercontent.com` 过慢或不可达。可改用 GitHub 仓库压缩包方式启动：
+
+```bash
+tmpdir="$(mktemp -d)" \
+&& curl -fsSL https://github.com/chopper1026/v-save/archive/refs/heads/main.tar.gz -o "$tmpdir/v-save.tar.gz" \
+&& tar -xzf "$tmpdir/v-save.tar.gz" -C "$tmpdir" \
+&& bash "$tmpdir/v-save-main/scripts/deploy.sh" --force-region cn
+```
+
 常用参数：
 
 ```bash
