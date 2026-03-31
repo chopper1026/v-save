@@ -11,6 +11,7 @@ final class CompanionRuntimeStore {
             lastRestartAt: ISO8601Timestamp.now(date: now),
             serverStatus: "stopped",
             serverAddress: nil,
+            adminPageOrigin: nil,
             chromeStatus: "idle",
             currentSession: nil,
             lastError: nil,
@@ -41,6 +42,11 @@ final class CompanionRuntimeStore {
 
     func setChromeStatus(_ status: String) {
         snapshotValue.chromeStatus = normalize(status, fallback: "idle")
+        notify()
+    }
+
+    func setAdminPageOrigin(_ origin: String?) {
+        snapshotValue.adminPageOrigin = normalizedOptional(origin)
         notify()
     }
 

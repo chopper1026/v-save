@@ -105,6 +105,7 @@ struct CompanionRuntimeSnapshot: Equatable {
     var lastRestartAt: String
     var serverStatus: String
     var serverAddress: String?
+    var adminPageOrigin: String?
     var chromeStatus: String
     var currentSession: PublicLocalBridgeSession?
     var lastError: String?
@@ -117,6 +118,7 @@ struct StatusPanelSnapshot: Equatable {
     var helperStatus: String
     var helperTone: StatusTone
     var serverAddress: String
+    var adminPageOrigin: String?
     var chromeStatus: String
     var currentSessionId: String
     var currentSessionStatus: String
@@ -135,12 +137,15 @@ enum StatusTone: Equatable {
 }
 
 enum StatusBarAction: Equatable {
+    case configureAdminPageOrigin
     case toggleOpenAtLogin
     case restartHelper
     case quitApp
 
     var menuItemIdentifier: String {
         switch self {
+        case .configureAdminPageOrigin:
+            return "configure-admin-page-origin"
         case .toggleOpenAtLogin:
             return "toggle-open-at-login"
         case .restartHelper:

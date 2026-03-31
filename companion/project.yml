@@ -19,9 +19,6 @@ settings:
     PRODUCT_NAME: "V-SAVE Companion"
     PRODUCT_MODULE_NAME: VSaveCompanion
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-    INFOPLIST_KEY_CFBundleDisplayName: "V-SAVE Companion"
-    INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
-    INFOPLIST_KEY_LSUIElement: YES
     SWIFT_EMIT_LOC_STRINGS: NO
 targets:
   VSaveCompanion:
@@ -29,6 +26,10 @@ targets:
     platform: macOS
     sources:
       - path: VSaveCompanion
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: VSaveCompanion/Info.plist
     scheme:
       testTargets:
         - VSaveCompanionTests

@@ -27,6 +27,26 @@ final class LocalBridgeRequestHandlerTests: XCTestCase {
         )
     }
 
+    func testAcceptsConfiguredHttpAdminOrigin() async {
+        let configuredOrigin = "http://admin.example.com"
+        let handler = LocalBridgeRequestHandler(
+            store: LocalBridgeSessionStore(),
+            logger: CompanionLogger(fileManager: FileManager.default),
+            validator: BackendOriginValidator(
+                environment: [:],
+                configuredOriginProvider: { configuredOrigin }
+            )
+        ) { _ in }
+
+        XCTAssertTrue(
+            handler.isAllowedOriginRequest(
+                requestOrigin: configuredOrigin,
+                backendOriginHeader: configuredOrigin,
+                bodyBackendOrigin: configuredOrigin
+            )
+        )
+    }
+
     func testAcceptsTrustedPreflight() async {
         let handler = makeHandler()
 
@@ -36,6 +56,34 @@ final class LocalBridgeRequestHandlerTests: XCTestCase {
                 requestedHeaders: "content-type, x-vsave-backend-origin"
             )
         )
+    }
+
+    func testOptionsHealthRespondsWithPrivateNetworkCorsHeaders() async {
+        let handler = LocalBridgeRequestHandler(
+            store: LocalBridgeSessionStore(),
+            logger: CompanionLogger(fileManager: FileManager.default),
+            validator: BackendOriginValidator(
+                environment: [:],
+                configuredOriginProvider: { "http://admin.example.com" }
+            )
+        ) { _ in }
+
+        let response = await handler.handle(
+            LocalBridgeHTTPRequest(
+                method: "OPTIONS",
+                path: "/health",
+                headers: [
+                    "Origin": "http://admin.example.com",
+                    "Access-Control-Request-Headers": "x-vsave-backend-origin",
+                    "Access-Control-Request-Private-Network": "true",
+                ],
+                body: Data()
+            )
+        )
+
+        XCTAssertEqual(response.statusCode, 204)
+        XCTAssertEqual(response.headers["Access-Control-Allow-Origin"], "http://admin.example.com")
+        XCTAssertEqual(response.headers["Access-Control-Allow-Private-Network"], "true")
     }
 
     func testHealthRouteReturnsCurrentSessionAndCorsHeaders() async throws {

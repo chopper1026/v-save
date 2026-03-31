@@ -32,6 +32,10 @@ final class StatusBarMenuBuilder {
         menu.addItem(viewItem(for: ErrorSectionView(snapshot: snapshot)))
         menu.addItem(viewItem(for: SystemSettingsSectionView(snapshot: snapshot)))
         menu.addItem(actionItem(
+            title: "设置管理端页面地址...",
+            statusAction: .configureAdminPageOrigin
+        ))
+        menu.addItem(actionItem(
             title: snapshot.openAtLoginEnabled ? "关闭开机自启" : "开启开机自启",
             statusAction: .toggleOpenAtLogin
         ))
@@ -136,6 +140,11 @@ private struct RuntimeStatusSectionView: View {
                 }
 
                 CompactStatusRow(label: "本地地址", value: snapshot.serverAddress, monospaced: true)
+                CompactStatusRow(
+                    label: "管理端",
+                    value: snapshot.adminPageOrigin ?? "未设置",
+                    monospaced: snapshot.adminPageOrigin != nil
+                )
                 CompactStatusRow(label: "最近重启", value: snapshot.lastRestartAt)
             }
         }

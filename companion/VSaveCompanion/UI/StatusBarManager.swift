@@ -44,7 +44,7 @@ final class StatusBarManager: NSObject, NSMenuDelegate {
     }
 
     @objc private func handleStatusItemClick() {
-        guard let snapshotProvider, let actionHandler, let statusItem else { return }
+        guard let snapshotProvider, let statusItem else { return }
         let snapshot = buildStatusPanelSnapshot(from: snapshotProvider())
         let builder = StatusBarMenuBuilder(
             snapshot: snapshot,
@@ -74,7 +74,7 @@ final class StatusBarManager: NSObject, NSMenuDelegate {
     }
 
     private func rebuildMenuIfVisible() {
-        guard let menu, statusItem?.button?.isHighlighted == true, let snapshotProvider, let actionHandler else {
+        guard let menu, statusItem?.button?.isHighlighted == true, let snapshotProvider else {
             return
         }
 
@@ -90,6 +90,8 @@ final class StatusBarManager: NSObject, NSMenuDelegate {
 
     private func statusBarAction(for identifier: String) -> StatusBarAction? {
         switch identifier {
+        case StatusBarAction.configureAdminPageOrigin.menuItemIdentifier:
+            return .configureAdminPageOrigin
         case StatusBarAction.toggleOpenAtLogin.menuItemIdentifier:
             return .toggleOpenAtLogin
         case StatusBarAction.restartHelper.menuItemIdentifier:

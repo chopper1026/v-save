@@ -6,6 +6,7 @@ func buildStatusPanelSnapshot(from snapshot: CompanionRuntimeSnapshot) -> Status
         helperStatus: helperStatusText(from: snapshot),
         helperTone: helperTone(from: snapshot),
         serverAddress: snapshot.serverAddress ?? CompanionConfig.bridgeServerAddress,
+        adminPageOrigin: snapshot.adminPageOrigin,
         chromeStatus: chromeStatusText(snapshot.chromeStatus),
         currentSessionId: snapshot.currentSession?.authSessionId ?? "无活动会话",
         currentSessionStatus: snapshot.currentSession.map { sessionStatusText($0.status) } ?? "--",

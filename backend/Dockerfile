@@ -6,6 +6,7 @@ FROM node:20-bookworm-slim AS builder
 ARG NPM_REGISTRY
 ARG APT_MIRROR
 ARG APT_SECURITY_MIRROR
+ARG PIP_INDEX_URL=
 WORKDIR /app
 
 RUN if [ -n "$APT_MIRROR" ]; then \
@@ -24,7 +25,9 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     fi \
  && apt-get -o Acquire::Retries=5 update \
  && apt-get install -y --no-install-recommends \
+    ca-certificates \
     python3 \
+    python3-venv \
     make \
     g++ \
  && rm -rf /var/lib/apt/lists/*
@@ -34,14 +37,24 @@ RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi 
  && npm ci
 
 COPY . .
-RUN npm run build
+RUN npm run build \
+ && python3 -m venv /opt/douyin-python \
+ && if [ -n "$PIP_INDEX_URL" ]; then \
+      /opt/douyin-python/bin/pip install --no-cache-dir -i "$PIP_INDEX_URL" --upgrade pip; \
+      /opt/douyin-python/bin/pip install --no-cache-dir -i "$PIP_INDEX_URL" gmssl; \
+    else \
+      /opt/douyin-python/bin/pip install --no-cache-dir --upgrade pip; \
+      /opt/douyin-python/bin/pip install --no-cache-dir gmssl; \
+    fi \
+ && npm prune --omit=dev \
+ && npm cache clean --force \
+ && rm -rf /root/.npm \
+ && find dist -type f \( -name '*.map' -o -name '*.d.ts' \) -delete
 
 FROM node:20-bookworm-slim AS runner
 
 ARG APT_MIRROR=
 ARG APT_SECURITY_MIRROR=
-ARG NPM_REGISTRY=
-ARG PIP_INDEX_URL=
 WORKDIR /app
 
 RUN if [ -n "$APT_MIRROR" ]; then \
@@ -62,12 +75,8 @@ RUN if [ -n "$APT_MIRROR" ]; then \
  && apt-get install -y --fix-missing --no-install-recommends \
     ffmpeg \
     yt-dlp \
-    curl \
     chromium \
     python3 \
-    make \
-    g++ \
-    python3-venv \
     ca-certificates \
     tzdata \
     fonts-freefont-ttf \
@@ -95,23 +104,15 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     libxfixes3 \
     libxkbcommon0 \
     libxrandr2 \
- && python3 -m venv /opt/douyin-python \
- && if [ -n "$PIP_INDEX_URL" ]; then \
-      /opt/douyin-python/bin/pip install --no-cache-dir -i "$PIP_INDEX_URL" --upgrade pip; \
-      /opt/douyin-python/bin/pip install --no-cache-dir -i "$PIP_INDEX_URL" gmssl; \
-    else \
-      /opt/douyin-python/bin/pip install --no-cache-dir --upgrade pip; \
-      /opt/douyin-python/bin/pip install --no-cache-dir gmssl; \
-    fi \
  && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/share/doc/* /usr/share/man/* /tmp/* \
  && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
  && echo "Asia/Shanghai" > /etc/timezone
 
 COPY package*.json ./
-RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
- && npm ci --omit=dev
-
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /opt/douyin-python /opt/douyin-python
 COPY tools/douyin/abogus.py ./tools/douyin/abogus.py
 
 ENV NODE_ENV=production
@@ -125,4 +126,4 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 EXPOSE 3001
 
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/main"]

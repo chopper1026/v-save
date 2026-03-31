@@ -42,6 +42,10 @@ final class LocalBridgeRequestHandler {
             named: CompanionConfig.localBridgeOriginHeader,
             in: request.headers
         )
+        let requestsPrivateNetworkAccess = headerValue(
+            named: "access-control-request-private-network",
+            in: request.headers
+        ).caseInsensitiveCompare("true") == .orderedSame
 
         do {
             if request.method == "OPTIONS" {
@@ -57,7 +61,11 @@ final class LocalBridgeRequestHandler {
                     )
                 }
 
-                return emptyResponse(statusCode: 204, origin: requestOrigin)
+                return emptyResponse(
+                    statusCode: 204,
+                    origin: requestOrigin,
+                    allowPrivateNetwork: requestsPrivateNetworkAccess
+                )
             }
 
             if request.path == "/health", request.method == "GET" {
@@ -119,7 +127,7 @@ final class LocalBridgeRequestHandler {
                 }
 
                 let session = createLocalBridgeSession(body)
-                store.startSession(session)
+                _ = store.startSession(session)
                 let response = jsonResponse(
                     statusCode: 202,
                     payload: SuccessfulEnvelope(data: store.getPublicSession()),
@@ -225,10 +233,17 @@ final class LocalBridgeRequestHandler {
         )
     }
 
-    private func emptyResponse(statusCode: Int, origin: String) -> LocalBridgeHTTPResponse {
+    private func emptyResponse(
+        statusCode: Int,
+        origin: String,
+        allowPrivateNetwork: Bool = false
+    ) -> LocalBridgeHTTPResponse {
         LocalBridgeHTTPResponse(
             statusCode: statusCode,
-            headers: corsHeaders(for: origin, extra: [:]),
+            headers: corsHeaders(
+                for: origin,
+                extra: allowPrivateNetwork ? ["Access-Control-Allow-Private-Network": "true"] : [:]
+            ),
             body: Data()
         )
     }
