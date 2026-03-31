@@ -1,8 +1,33 @@
 ARG NPM_REGISTRY=
+ARG APT_MIRROR=
+ARG APT_SECURITY_MIRROR=
 FROM node:20-bookworm-slim AS builder
 
 ARG NPM_REGISTRY
+ARG APT_MIRROR
+ARG APT_SECURITY_MIRROR
 WORKDIR /app
+
+RUN if [ -n "$APT_MIRROR" ]; then \
+      if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i "s|http://deb.debian.org/debian|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources; \
+        if [ -n "$APT_SECURITY_MIRROR" ]; then \
+          sed -i "s|http://security.debian.org/debian-security|$APT_SECURITY_MIRROR|g" /etc/apt/sources.list.d/debian.sources; \
+        fi; \
+      fi; \
+      if [ -f /etc/apt/sources.list ]; then \
+        sed -i "s|http://deb.debian.org/debian|$APT_MIRROR|g" /etc/apt/sources.list; \
+        if [ -n "$APT_SECURITY_MIRROR" ]; then \
+          sed -i "s|http://security.debian.org/debian-security|$APT_SECURITY_MIRROR|g" /etc/apt/sources.list; \
+        fi; \
+      fi; \
+    fi \
+ && apt-get -o Acquire::Retries=5 update \
+ && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
@@ -40,6 +65,8 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     curl \
     chromium \
     python3 \
+    make \
+    g++ \
     python3-venv \
     ca-certificates \
     tzdata \
