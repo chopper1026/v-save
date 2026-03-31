@@ -45,6 +45,14 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --force-region cn
 ```
 
+如果服务器位于中国大陆，脚本会优先从 Docker 官方 GitHub 仓库下载安装脚本，并默认使用 `AzureChinaCloud` 安装镜像。若你需要手动覆盖，可这样执行：
+
+```bash
+export V_SAVE_DOCKER_INSTALL_SCRIPT_URL_CN="https://raw.githubusercontent.com/docker/docker-install/master/install.sh"
+export V_SAVE_DOCKER_INSTALL_MIRROR_CN="AzureChinaCloud"
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --force-region cn
+```
+
 脚本会自动完成：
 
 - 检测架构并选择合适的 Docker 镜像。
