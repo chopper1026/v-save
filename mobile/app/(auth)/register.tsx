@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,7 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/screen';
 import { colors } from '@/constants/theme';
 import { API_BASE_URL } from '@/lib/env';
-import { api, mapApiUserToMobileUser } from '@/lib/api';
+import {
+  api,
+  getPublicSystemSettings,
+  mapApiUserToMobileUser,
+} from '@/lib/api';
 import { extractApiDebugDetails, extractApiErrorMessage } from '@/lib/error';
 import { useAuthStore } from '@/store/auth-store';
 import type { AuthResponse } from '@/types/api';
@@ -26,6 +30,54 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadPublicSettings = async () => {
+      try {
+        const settings = await getPublicSystemSettings();
+        if (!isActive) {
+          return;
+        }
+        setRegistrationEnabled(settings.registrationEnabled);
+        setSettingsLoaded(true);
+        if (!settings.registrationEnabled) {
+          router.replace('/(auth)/login');
+        }
+      } catch (_err) {
+        if (!isActive) {
+          return;
+        }
+        setRegistrationEnabled(false);
+        setSettingsLoaded(true);
+        router.replace('/(auth)/login');
+      }
+    };
+
+    void loadPublicSettings();
+
+    return () => {
+      isActive = false;
+    };
+  }, [router]);
+
+  if (!settingsLoaded) {
+    return (
+      <Screen>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>正在检查注册入口...</Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (!registrationEnabled) {
+    return null;
+  }
 
   const onSubmit = async () => {
     if (!nickname.trim() || !email.trim() || !password.trim()) {
@@ -178,6 +230,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.card,
     gap: 12,
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   inputWrap: {
     height: 48,

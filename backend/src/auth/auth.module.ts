@@ -7,10 +7,12 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { readJwtSecret } from './jwt-secret';
+import { SystemSettingsModule } from '../system-settings/system-settings.module';
 
 @Module({
   imports: [
     UsersModule,
+    SystemSettingsModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

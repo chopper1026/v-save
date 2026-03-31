@@ -12,6 +12,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AuthHealthModule } from './auth-health/auth-health.module';
 import { AdminUsersModule } from './admin/admin-users.module';
 import { RuntimeMonitorModule } from './runtime-monitor/runtime-monitor.module';
+import { SystemSettingsModule } from './system-settings/system-settings.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { RuntimeMonitorModule } from './runtime-monitor/runtime-monitor.module';
         };
       },
     }),
+    SystemSettingsModule,
     RuntimeMonitorModule,
     UsersModule,
     AuthModule,

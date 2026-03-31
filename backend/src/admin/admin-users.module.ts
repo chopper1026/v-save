@@ -8,17 +8,21 @@ import { AdminUsersService } from './admin-users.service';
 import { UserAdminAuditLog } from './entities/user-admin-audit-log.entity';
 import { DownloadModeModule } from '../download-mode/download-mode.module';
 import { AdminDownloadModesController } from './admin-download-modes.controller';
+import { SystemSettingsModule } from '../system-settings/system-settings.module';
+import { AdminSystemSettingsController } from './admin-system-settings.controller';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, UserAdminAuditLog]),
     NotificationsModule,
     DownloadModeModule,
+    SystemSettingsModule,
   ],
   controllers: [
     AdminUsersController,
     AdminAuditController,
     AdminDownloadModesController,
+    AdminSystemSettingsController,
   ],
   providers: [AdminUsersService],
   exports: [AdminUsersService],

@@ -1,13 +1,14 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Activity, ClipboardList, KeyRound, SlidersHorizontal, Users } from 'lucide-react'
+import { Activity, ClipboardList, KeyRound, Settings, SlidersHorizontal, Users } from 'lucide-react'
 import Header from '../components/Header'
 import AdminAuthManagement from '../components/AdminAuthManagement'
 import DownloadModeManagement from '../components/DownloadModeManagement'
+import SystemSettingsManagement from '../components/SystemSettingsManagement'
 import { api } from '../lib/api'
 import { useUserStore } from '../store/useUserStore'
 
-type AdminTab = 'users' | 'audit' | 'auth' | 'download-policy' | 'runtime'
+type AdminTab = 'users' | 'audit' | 'auth' | 'download-policy' | 'runtime' | 'system-settings'
 
 interface AdminUserItem {
   id: string
@@ -29,7 +30,7 @@ interface AdminAuditItem {
   targetUserId: string
   targetEmail: string | null
   action: string
-  module: 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY'
+  module: 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY' | 'SYSTEM'
   platform: 'BILIBILI' | 'DOUYIN' | 'NONE'
   targetType: 'USER' | 'AUTH_SESSION' | 'SYSTEM'
   beforeState: Record<string, unknown> | null
@@ -48,7 +49,7 @@ interface PagedResponse<T> {
   }
 }
 
-type AuditModuleFilter = 'ALL' | 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY'
+type AuditModuleFilter = 'ALL' | 'USER' | 'ROLE' | 'AUTH' | 'DOWNLOAD_POLICY' | 'SYSTEM'
 type AuditPlatformFilter = 'ALL' | 'BILIBILI' | 'DOUYIN' | 'NONE'
 
 const USER_PAGE_SIZE_OPTIONS = [10, 20, 50]
@@ -58,6 +59,7 @@ const TABS: Array<{ id: AdminTab; label: string; icon: typeof Users }> = [
   { id: 'runtime', label: '运行看板', icon: Activity },
   { id: 'download-policy', label: '下载模式管理', icon: SlidersHorizontal },
   { id: 'auth', label: '登录态管理', icon: KeyRound },
+  { id: 'system-settings', label: '系统设置', icon: Settings },
   { id: 'users', label: '用户管理', icon: Users },
   { id: 'audit', label: '操作审计', icon: ClipboardList },
 ]
@@ -294,6 +296,7 @@ export default function AdminUsers() {
   const auditActionLabelMap = useMemo(() => ({
     UPDATE_ROLE: '角色调整',
     UPDATE_STATUS: '状态调整',
+    UPDATE_SYSTEM_SETTING: '系统设置更新',
     UPDATE_DOWNLOAD_MODE: '下载模式更新',
     UPDATE_DOWNLOAD_MODE_CONFIG: '下载模式更新',
     BILIBILI_QRCODE_GENERATED: 'B站二维码生成',
@@ -365,6 +368,14 @@ export default function AdminUsers() {
           return `${targetLabel || '下载模式'} 已更新为 ${to}`
         }
         break
+      }
+      case 'UPDATE_SYSTEM_SETTING': {
+        const from = getBoolean(before, 'registrationEnabled')
+        const to = getBoolean(after, 'registrationEnabled')
+        if (from !== to) {
+          return `注册入口由${from ? '开放' : '关闭'}调整为${to ? '开放' : '关闭'}`
+        }
+        return `注册入口当前为${to ? '开放' : '关闭'}`
       }
       default:
         break
@@ -629,6 +640,7 @@ export default function AdminUsers() {
                       <option value="ROLE">角色分配</option>
                       <option value="AUTH">登录态管理</option>
                       <option value="DOWNLOAD_POLICY">下载模式管理</option>
+                      <option value="SYSTEM">系统设置</option>
                     </select>
                     <select
                       value={auditPlatformFilter}
@@ -739,6 +751,7 @@ export default function AdminUsers() {
               )}
 
               {activeTab === 'auth' && <AdminAuthManagement />}
+              {activeTab === 'system-settings' && <SystemSettingsManagement />}
               {activeTab === 'download-policy' && <DownloadModeManagement />}
               {activeTab === 'runtime' && (
                 <Suspense

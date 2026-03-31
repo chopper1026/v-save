@@ -1,14 +1,16 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { SystemSettingsService } from '../system-settings/system-settings.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private readonly systemSettingsService?: SystemSettingsService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
@@ -59,6 +61,11 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
+    const settings = await this.systemSettingsService?.getPublicSettings?.();
+    if (settings && settings.registrationEnabled === false) {
+      throw new ForbiddenException('当前未开放注册');
+    }
+
     const user = await this.usersService.create(
       registerDto.email,
       registerDto.password,

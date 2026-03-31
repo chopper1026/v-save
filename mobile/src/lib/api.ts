@@ -2,7 +2,11 @@ import axios from 'axios';
 import { API_BASE_URL, API_ORIGIN } from '@/lib/env';
 import { useAuthStore } from '@/store/auth-store';
 import type { RuntimeTraceStage } from '@/lib/runtime-telemetry';
-import type { ApiUser, MobileUser } from '@/types/api';
+import type {
+  ApiUser,
+  MobileUser,
+  PublicSystemSettingsResponse,
+} from '@/types/api';
 
 const PROXY_FETCH_BASE_URL = `${API_BASE_URL.replace(/\/+$/, '')}/proxy/fetch`;
 const API_BASE_HOST = API_BASE_URL.replace(/\/+$/, '');
@@ -60,6 +64,18 @@ export const mapApiUserToMobileUser = (user: ApiUser): MobileUser => {
     phone: user.phone || null,
     avatar: user.avatar || undefined,
     downloadCount: user.downloadCount ?? 0,
+  };
+};
+
+export const getPublicSystemSettings = async (): Promise<{
+  registrationEnabled: boolean;
+}> => {
+  const response =
+    await api.get<PublicSystemSettingsResponse>('/system-settings/public');
+
+  return {
+    registrationEnabled:
+      response.data?.data?.registrationEnabled === true,
   };
 };
 

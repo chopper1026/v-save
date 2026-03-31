@@ -31,13 +31,41 @@ export class UsersService {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const userCount = await this.usersRepository.count();
-    const defaultRole: UserRole = userCount === 0 ? 'SUPER_ADMIN' : 'USER';
     const user = this.usersRepository.create({
       email,
       password: hashedPassword,
       nickname,
-      role: defaultRole,
+      role: 'USER',
+      accountStatus: 'ACTIVE',
+    });
+
+    return this.usersRepository.save(user);
+  }
+
+  async ensureBootstrapSuperAdmin(input: {
+    email: string;
+    password: string;
+    nickname: string;
+  }): Promise<User> {
+    const email = String(input.email || '').trim();
+    const password = String(input.password || '').trim();
+    const nickname = String(input.nickname || '').trim() || '系统管理员';
+
+    const existingUser = await this.findByEmail(email);
+    if (existingUser) {
+      if (existingUser.role !== 'SUPER_ADMIN') {
+        existingUser.role = 'SUPER_ADMIN';
+        return this.usersRepository.save(existingUser);
+      }
+      return existingUser;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = this.usersRepository.create({
+      email,
+      password: hashedPassword,
+      nickname,
+      role: 'SUPER_ADMIN',
       accountStatus: 'ACTIVE',
     });
 
@@ -189,16 +217,14 @@ export class UsersService {
   }
 
   private getConfiguredSuperAdminEmails(): Set<string> {
-    const raw = String(process.env.SUPER_ADMIN_EMAILS || '').trim();
-    if (!raw) {
-      return new Set<string>();
-    }
+    const values = [
+      String(process.env.SUPER_ADMIN_EMAILS || ''),
+      String(process.env.SUPER_ADMIN_BOOTSTRAP_EMAIL || ''),
+    ]
+      .flatMap((raw) => raw.split(','))
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
 
-    return new Set(
-      raw
-        .split(',')
-        .map((item) => item.trim().toLowerCase())
-        .filter(Boolean),
-    );
+    return new Set(values);
   }
 }

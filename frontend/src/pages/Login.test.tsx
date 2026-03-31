@@ -15,6 +15,7 @@ const {
   clearLegacyRememberedPasswordMock,
   storeBrowserCredentialMock,
   storeState,
+  publicSettingsState,
 } = vi.hoisted(() => ({
   loginMock: vi.fn(),
   apiPostMock: vi.fn(),
@@ -27,6 +28,10 @@ const {
   storeState: {
     isLoggedIn: false,
     isHydrated: true,
+  },
+  publicSettingsState: {
+    registrationEnabled: true,
+    isLoaded: true,
   },
 }))
 
@@ -54,6 +59,10 @@ vi.mock('../lib/remember-password', () => ({
   storeBrowserCredential: storeBrowserCredentialMock,
 }))
 
+vi.mock('../hooks/usePublicSystemSettings', () => ({
+  usePublicSystemSettings: () => publicSettingsState,
+}))
+
 describe('Login', () => {
   afterEach(() => {
     cleanup()
@@ -77,6 +86,8 @@ describe('Login', () => {
     })
     storeState.isLoggedIn = false
     storeState.isHydrated = true
+    publicSettingsState.registrationEnabled = true
+    publicSettingsState.isLoaded = true
   })
 
   it('loads remembered login preference without reading back plaintext passwords', async () => {
@@ -145,5 +156,21 @@ describe('Login', () => {
     })
     expect(clearRememberedLoginPreferenceMock).not.toHaveBeenCalled()
     expect(localStorage.getItem('remembered-login-credentials')).toBeNull()
+  })
+
+  it('hides the register shortcut when registration is disabled', async () => {
+    publicSettingsState.registrationEnabled = false
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(clearLegacyRememberedPasswordMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(screen.queryByText('立即注册')).toBeNull()
   })
 })

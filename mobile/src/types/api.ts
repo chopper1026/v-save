@@ -22,6 +22,15 @@ export interface AuthResponse {
   user: ApiUser;
 }
 
+export interface PublicSystemSettings {
+  registrationEnabled: boolean;
+}
+
+export interface PublicSystemSettingsResponse {
+  success?: boolean;
+  data?: PublicSystemSettings;
+}
+
 export interface UserProfile extends ApiUser {
   createdAt?: string;
   updatedAt?: string;

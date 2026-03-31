@@ -119,11 +119,136 @@ main() {
   MYSQL_USER=""
   MYSQL_DATABASE=""
   JWT_SECRET=""
+  SUPER_ADMIN_EMAILS=""
+  SUPER_ADMIN_BOOTSTRAP_EMAIL=""
+  SUPER_ADMIN_BOOTSTRAP_PASSWORD=""
+  SUPER_ADMIN_BOOTSTRAP_NICKNAME=""
+  SUPER_ADMIN_PASSWORD_GENERATED=0
   load_or_generate_env
   assert_eq "$APT_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/debian" "中国大陆环境下的 Debian 镜像应默认使用 HTTP，避免基础镜像缺证书导致 APT 失败"
   assert_eq "$APT_SECURITY_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/debian-security" "中国大陆环境下的 Debian Security 镜像应默认使用 HTTP"
   assert_eq "$ALPINE_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/alpine" "中国大陆环境下的 Alpine 镜像应默认使用 HTTP"
+  assert_eq "$SUPER_ADMIN_BOOTSTRAP_EMAIL" "admin@gmail.com" "应为一键部署提供默认超管邮箱"
+  assert_eq "$SUPER_ADMIN_BOOTSTRAP_NICKNAME" "系统管理员" "应为一键部署提供默认超管昵称"
+  assert_contains "$SUPER_ADMIN_EMAILS" "admin@gmail.com" "超级管理员邮箱列表应至少包含 bootstrap 邮箱"
+  if [[ -z "$SUPER_ADMIN_BOOTSTRAP_PASSWORD" ]]; then
+    printf '断言失败：首次部署应自动生成超管初始化密码。\n' >&2
+    exit 1
+  fi
+  assert_eq "$SUPER_ADMIN_PASSWORD_GENERATED" "1" "首次部署缺少超管密码时应标记为新生成"
   rm -rf "$temp_repo"
+
+  local state_root state_repo state_file
+  state_root="$(mktemp -d)"
+  state_repo="${state_root}/v-save"
+  state_file="${state_root}/.v-save-deploy-state.env"
+  mkdir -p "${state_repo}/backend"
+  cat >"${state_repo}/.env" <<EOF
+FRONTEND_PORT=8080
+BACKEND_PORT=3001
+MYSQL_PORT=3306
+MYSQL_ROOT_PASSWORD=repo-root
+MYSQL_DATABASE=repo-db
+MYSQL_USER=repo-user
+MYSQL_PASSWORD=repo-pass
+JWT_SECRET=repo-jwt
+SUPER_ADMIN_EMAILS=repo-admin@example.com
+SUPER_ADMIN_BOOTSTRAP_EMAIL=repo-admin@example.com
+SUPER_ADMIN_BOOTSTRAP_PASSWORD=repo-admin-pass
+SUPER_ADMIN_BOOTSTRAP_NICKNAME=Repo Admin
+EOF
+  cat >"$state_file" <<EOF
+FRONTEND_PORT=4871
+BACKEND_PORT=13001
+MYSQL_PORT=13306
+MYSQL_ROOT_PASSWORD=state-root
+MYSQL_DATABASE=state-db
+MYSQL_USER=state-user
+MYSQL_PASSWORD=state-pass
+JWT_SECRET=state-jwt
+SUPER_ADMIN_EMAILS=ops@example.com
+SUPER_ADMIN_BOOTSTRAP_EMAIL=state-admin@example.com
+SUPER_ADMIN_BOOTSTRAP_PASSWORD=state-admin-pass
+SUPER_ADMIN_BOOTSTRAP_NICKNAME=State Admin
+EOF
+  REPO_DIR="$state_repo"
+  DEPLOY_HOST="9.9.9.9"
+  USE_CN_MIRROR=0
+  FRONTEND_PORT=""
+  BACKEND_PORT=""
+  MYSQL_PORT=""
+  MYSQL_ROOT_PASSWORD=""
+  MYSQL_PASSWORD=""
+  MYSQL_USER=""
+  MYSQL_DATABASE=""
+  JWT_SECRET=""
+  SUPER_ADMIN_EMAILS=""
+  SUPER_ADMIN_BOOTSTRAP_EMAIL=""
+  SUPER_ADMIN_BOOTSTRAP_PASSWORD=""
+  SUPER_ADMIN_BOOTSTRAP_NICKNAME=""
+  SUPER_ADMIN_PASSWORD_GENERATED=0
+  load_or_generate_env
+  assert_eq "$FRONTEND_PORT" "4871" "状态文件应优先生效并保留前端端口"
+  assert_eq "$BACKEND_PORT" "13001" "状态文件应优先生效并保留后端端口"
+  assert_eq "$MYSQL_PORT" "13306" "状态文件应优先生效并保留 MySQL 端口"
+  assert_eq "$MYSQL_ROOT_PASSWORD" "state-root" "状态文件应优先生效并保留 MySQL Root 密码"
+  assert_eq "$MYSQL_DATABASE" "state-db" "状态文件应优先生效并保留数据库名称"
+  assert_eq "$MYSQL_USER" "state-user" "状态文件应优先生效并保留数据库用户"
+  assert_eq "$MYSQL_PASSWORD" "state-pass" "状态文件应优先生效并保留数据库密码"
+  assert_eq "$JWT_SECRET" "state-jwt" "状态文件应优先生效并保留 JWT 密钥"
+  assert_eq "$SUPER_ADMIN_BOOTSTRAP_EMAIL" "state-admin@example.com" "状态文件应优先生效并保留超管邮箱"
+  assert_eq "$SUPER_ADMIN_BOOTSTRAP_PASSWORD" "state-admin-pass" "状态文件应优先生效并保留超管密码"
+  assert_eq "$SUPER_ADMIN_BOOTSTRAP_NICKNAME" "State Admin" "状态文件应优先生效并保留超管昵称"
+  assert_eq "$SUPER_ADMIN_EMAILS" "ops@example.com,state-admin@example.com" "超管邮箱列表应保留原值并补充 bootstrap 邮箱"
+  assert_eq "$SUPER_ADMIN_PASSWORD_GENERATED" "0" "已有超管密码时不应重新生成"
+  write_env_files
+  assert_contains "$(cat "$state_file")" "MYSQL_PASSWORD=state-pass" "写回配置时应同步刷新状态文件"
+  assert_contains "$(cat "${state_repo}/.env")" "MYSQL_PASSWORD=state-pass" "根目录 .env 应与状态文件保持一致"
+  assert_contains "$(cat "$state_file")" "SUPER_ADMIN_BOOTSTRAP_PASSWORD=state-admin-pass" "状态文件应同步写回超管初始化密码"
+  assert_contains "$(cat "${state_repo}/.env")" "SUPER_ADMIN_BOOTSTRAP_PASSWORD=state-admin-pass" "根目录 .env 应同步写回超管初始化密码"
+  assert_contains "$(cat "${state_repo}/backend/.env")" "SUPER_ADMIN_EMAILS=ops@example.com,state-admin@example.com" "backend/.env 应写入合并后的超管邮箱列表"
+  rm -rf "$state_root"
+
+  local mysql_reconcile_marker
+  mysql_reconcile_marker="$(mktemp)"
+  rm -f "$mysql_reconcile_marker"
+  mysql_login_with_current_app_credentials() {
+    [[ -f "$mysql_reconcile_marker" ]]
+  }
+  mysql_login_with_current_root_credentials() {
+    return 0
+  }
+  reconcile_mysql_app_credentials() {
+    : > "$mysql_reconcile_marker"
+  }
+  ensure_mysql_credentials
+  if [[ ! -f "$mysql_reconcile_marker" ]]; then
+    printf '断言失败：应用账号登录失败但 Root 凭据可用时，应自动同步 MySQL 应用账号密码。\n' >&2
+    exit 1
+  fi
+  rm -f "$mysql_reconcile_marker"
+
+  local mysql_wait_attempts
+  mysql_wait_attempts=0
+  sleep() {
+    :
+  }
+  mysql_login_with_current_app_credentials() {
+    mysql_wait_attempts=$((mysql_wait_attempts + 1))
+    [[ "$mysql_wait_attempts" -ge 3 ]]
+  }
+  mysql_login_with_current_root_credentials() {
+    return 1
+  }
+  reconcile_mysql_app_credentials() {
+    return 0
+  }
+  ensure_mysql_credentials
+  if [[ "$mysql_wait_attempts" -lt 3 ]]; then
+    printf '断言失败：MySQL 初始化期间应用账号暂不可用时，脚本应等待凭据就绪后再继续。\n' >&2
+    exit 1
+  fi
+  unset -f sleep
 
   local archive_root reuse_target reuse_marker
   archive_root="$(mktemp -d)"
@@ -191,10 +316,10 @@ main() {
   MYSQL_USER="vsave_user"
   MYSQL_PASSWORD="app-secret"
   MYSQL_ROOT_PASSWORD="root-secret"
+  SUPER_ADMIN_BOOTSTRAP_EMAIL="admin@gmail.com"
+  SUPER_ADMIN_BOOTSTRAP_PASSWORD="bootstrap-secret"
+  SUPER_ADMIN_PASSWORD_GENERATED=1
   REPO_DIR="/tmp/v-save"
-  query_user_count() {
-    printf '0\n'
-  }
 
   local summary
   summary="$(show_summary)"
@@ -202,6 +327,13 @@ main() {
   assert_contains "$summary" "配置文件位置：/tmp/v-save/.env" "部署摘要应保留配置文件位置"
   assert_contains "$summary" "数据库密码：app-secret" "部署摘要应显示应用数据库密码"
   assert_contains "$summary" "数据库 Root 密码：root-secret" "部署摘要应显示 Root 密码"
+  assert_contains "$summary" "超级管理员邮箱：admin@gmail.com" "部署摘要应显示超管邮箱"
+  assert_contains "$summary" "超级管理员初始密码：bootstrap-secret" "首次生成超管密码时应在摘要中回显一次"
+  assert_contains "$summary" "注册入口默认状态：关闭" "部署摘要应提示注册入口默认关闭"
+
+  SUPER_ADMIN_PASSWORD_GENERATED=0
+  summary="$(show_summary)"
+  assert_contains "$summary" "超级管理员密码：本次未重置" "重跑脚本时不应再次明文输出旧超管密码"
 
   printf 'deploy.sh 测试通过。\n'
 }

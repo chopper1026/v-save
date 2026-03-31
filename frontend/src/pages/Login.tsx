@@ -12,6 +12,7 @@ import {
   saveRememberedLoginPreference,
   storeBrowserCredential,
 } from '../lib/remember-password'
+import { usePublicSystemSettings } from '../hooks/usePublicSystemSettings'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -23,6 +24,7 @@ export default function Login() {
   const login = useUserStore((state) => state.login)
   const isLoggedIn = useUserStore((state) => state.isLoggedIn)
   const isHydrated = useUserStore((state) => state.isHydrated)
+  const { registrationEnabled } = usePublicSystemSettings()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -210,12 +212,14 @@ export default function Login() {
         </button>
       </form>
 
-      <div className="mt-6 text-center text-sm text-slate-500">
-        还没有账号？{' '}
-        <Link to="/register" className="text-sky-600 font-semibold hover:underline">
-          立即注册
-        </Link>
-      </div>
+      {registrationEnabled && (
+        <div className="mt-6 text-center text-sm text-slate-500">
+          还没有账号？{' '}
+          <Link to="/register" className="text-sky-600 font-semibold hover:underline">
+            立即注册
+          </Link>
+        </div>
+      )}
     </AuthLayout>
   )
 }

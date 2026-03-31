@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,7 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/screen';
 import { colors } from '@/constants/theme';
 import { API_BASE_URL } from '@/lib/env';
-import { api, mapApiUserToMobileUser } from '@/lib/api';
+import {
+  api,
+  getPublicSystemSettings,
+  mapApiUserToMobileUser,
+} from '@/lib/api';
 import { extractApiDebugDetails, extractApiErrorMessage } from '@/lib/error';
 import { useAuthStore } from '@/store/auth-store';
 import type { AuthResponse } from '@/types/api';
@@ -24,6 +28,32 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadPublicSettings = async () => {
+      try {
+        const settings = await getPublicSystemSettings();
+        if (!isActive) {
+          return;
+        }
+        setRegistrationEnabled(settings.registrationEnabled);
+      } catch (_err) {
+        if (!isActive) {
+          return;
+        }
+        setRegistrationEnabled(false);
+      }
+    };
+
+    void loadPublicSettings();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const onSubmit = async () => {
     if (!email.trim() || !password.trim()) {
@@ -102,11 +132,13 @@ export default function LoginScreen() {
           )}
         </Pressable>
 
-        <Link href="/(auth)/register" asChild>
-          <Pressable>
-            <Text style={styles.linkText}>没有账号？立即注册</Text>
-          </Pressable>
-        </Link>
+        {registrationEnabled && (
+          <Link href="/(auth)/register" asChild>
+            <Pressable>
+              <Text style={styles.linkText}>没有账号？立即注册</Text>
+            </Pressable>
+          </Link>
+        )}
       </View>
     </Screen>
   );

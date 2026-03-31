@@ -52,4 +52,78 @@ describe('UsersService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.save).not.toHaveBeenCalled();
   });
+
+  it('creates the first registered user as a normal user instead of super admin', async () => {
+    const repository = createRepositoryMock();
+    const notifications = createNotificationsMock();
+    repository.findOne.mockResolvedValue(null);
+    repository.count.mockResolvedValue(0);
+
+    const service = new UsersService(repository as any, notifications as any);
+    const created = await service.create('first@example.com', 'Secret123!', '第一个用户');
+
+    expect(created.role).toBe('USER');
+    expect(created.accountStatus).toBe('ACTIVE');
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'first@example.com',
+        nickname: '第一个用户',
+        role: 'USER',
+      }),
+    );
+  });
+
+  it('creates bootstrap super admin when the bootstrap account is missing', async () => {
+    const repository = createRepositoryMock();
+    const notifications = createNotificationsMock();
+    repository.findOne.mockResolvedValue(null);
+
+    const service = new UsersService(repository as any, notifications as any);
+
+    await (service as any).ensureBootstrapSuperAdmin({
+      email: 'admin@gmail.com',
+      password: 'admin123',
+      nickname: '系统管理员',
+    });
+
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'admin@gmail.com',
+        nickname: '系统管理员',
+        role: 'SUPER_ADMIN',
+        accountStatus: 'ACTIVE',
+      }),
+    );
+  });
+
+  it('does not overwrite bootstrap user password or status when the account already exists', async () => {
+    const repository = createRepositoryMock();
+    const notifications = createNotificationsMock();
+    repository.findOne.mockResolvedValue({
+      id: 'admin-1',
+      email: 'admin@gmail.com',
+      password: 'existing-hash',
+      nickname: '旧昵称',
+      role: 'USER',
+      accountStatus: 'DISABLED',
+    });
+
+    const service = new UsersService(repository as any, notifications as any);
+
+    await (service as any).ensureBootstrapSuperAdmin({
+      email: 'admin@gmail.com',
+      password: 'new-password',
+      nickname: '系统管理员',
+    });
+
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'admin-1',
+        password: 'existing-hash',
+        nickname: '旧昵称',
+        role: 'SUPER_ADMIN',
+        accountStatus: 'DISABLED',
+      }),
+    );
+  });
 });
