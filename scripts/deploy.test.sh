@@ -50,6 +50,40 @@ main() {
     exit 1
   fi
 
+  USE_CN_MIRROR=1
+  assert_eq \
+    "$(get_docker_install_script_url)" \
+    "https://raw.githubusercontent.com/docker/docker-install/master/install.sh" \
+    "中国大陆环境应优先使用官方 GitHub 源下载 Docker 安装脚本"
+  assert_eq \
+    "$(get_docker_install_mirror_flag)" \
+    "AzureChinaCloud" \
+    "中国大陆环境应默认启用 Docker 官方支持的 AzureChinaCloud 安装镜像"
+
+  USE_CN_MIRROR=0
+  assert_eq \
+    "$(get_docker_install_script_url)" \
+    "https://get.docker.com" \
+    "全球网络环境应继续使用 get.docker.com 下载 Docker 安装脚本"
+  assert_eq \
+    "$(get_docker_install_mirror_flag)" \
+    "" \
+    "全球网络环境不应附带 Docker 安装镜像参数"
+
+  USE_CN_MIRROR=1
+  V_SAVE_DOCKER_INSTALL_SCRIPT_URL_CN="https://mirror.example.com/docker-install.sh"
+  V_SAVE_DOCKER_INSTALL_MIRROR_CN="Aliyun"
+  assert_eq \
+    "$(get_docker_install_script_url)" \
+    "https://mirror.example.com/docker-install.sh" \
+    "应支持覆盖中国大陆环境下的 Docker 安装脚本地址"
+  assert_eq \
+    "$(get_docker_install_mirror_flag)" \
+    "Aliyun" \
+    "应支持覆盖中国大陆环境下的 Docker 安装镜像参数"
+  unset V_SAVE_DOCKER_INSTALL_SCRIPT_URL_CN
+  unset V_SAVE_DOCKER_INSTALL_MIRROR_CN
+
   PROJECT_NAME="V-SAVE"
   WEB_PUBLIC_ORIGIN="http://demo.example.com"
   PUBLIC_API_ORIGIN="http://demo.example.com/api"

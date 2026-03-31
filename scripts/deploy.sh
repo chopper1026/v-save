@@ -297,16 +297,49 @@ install_compose_plugin_if_needed() {
   die 'Docker 已安装，但 Compose 组件不可用，请手动安装后重试。'
 }
 
+get_docker_install_script_url() {
+  if [[ "$USE_CN_MIRROR" -eq 1 ]]; then
+    printf '%s\n' "${V_SAVE_DOCKER_INSTALL_SCRIPT_URL_CN:-${V_SAVE_DOCKER_INSTALL_SCRIPT_URL:-https://raw.githubusercontent.com/docker/docker-install/master/install.sh}}"
+    return
+  fi
+
+  printf '%s\n' "${V_SAVE_DOCKER_INSTALL_SCRIPT_URL:-https://get.docker.com}"
+}
+
+get_docker_install_mirror_flag() {
+  if [[ "$USE_CN_MIRROR" -eq 1 ]]; then
+    printf '%s\n' "${V_SAVE_DOCKER_INSTALL_MIRROR_CN:-${V_SAVE_DOCKER_INSTALL_MIRROR:-AzureChinaCloud}}"
+    return
+  fi
+
+  printf '\n'
+}
+
 install_docker() {
   log_info '开始安装 Docker（官方安装脚本）...'
   local temp_script
+  local install_script_url
+  local install_mirror
+
+  install_script_url="$(get_docker_install_script_url)"
+  install_mirror="$(get_docker_install_mirror_flag)"
   temp_script="$(mktemp)"
-  curl -fsSL https://get.docker.com -o "$temp_script"
+
+  if ! curl -fsSL "$install_script_url" -o "$temp_script"; then
+    rm -f "$temp_script"
+    die "下载 Docker 安装脚本失败：${install_script_url}"
+  fi
+
+  local install_cmd=(sh "$temp_script")
+  if [[ -n "$install_mirror" ]]; then
+    log_info "检测到中国大陆网络环境，将使用 Docker 安装镜像：${install_mirror}"
+    install_cmd+=(--mirror "$install_mirror")
+  fi
 
   if [[ $EUID -eq 0 ]]; then
-    sh "$temp_script"
+    "${install_cmd[@]}"
   elif has_cmd sudo; then
-    sudo sh "$temp_script"
+    sudo "${install_cmd[@]}"
   else
     rm -f "$temp_script"
     die '当前账号既不是 root，也没有 sudo，无法安装 Docker。'
