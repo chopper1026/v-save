@@ -487,6 +487,11 @@ EOF
   FRONTEND_IMAGE_SIZE="94.7MB"
   REPO_DIR="/tmp/v-save"
 
+  local credential_notice
+  credential_notice="$(show_super_admin_credentials)"
+  assert_contains "$credential_notice" "超级管理员邮箱：admin@gmail.com" "超管凭据提示应显示邮箱"
+  assert_contains "$credential_notice" "超级管理员密码：bootstrap-secret" "超管凭据提示应始终显示当前密码"
+
   local summary
   summary="$(show_summary)"
   assert_contains "$summary" "前端访问地址：http://demo.example.com" "部署摘要应保留访问地址"
@@ -494,15 +499,19 @@ EOF
   assert_contains "$summary" "数据库密码：app-secret" "部署摘要应显示应用数据库密码"
   assert_contains "$summary" "数据库 Root 密码：root-secret" "部署摘要应显示 Root 密码"
   assert_contains "$summary" "超级管理员邮箱：admin@gmail.com" "部署摘要应显示超管邮箱"
-  assert_contains "$summary" "超级管理员初始密码：bootstrap-secret" "首次生成超管密码时应在摘要中回显一次"
+  assert_contains "$summary" "超级管理员密码：bootstrap-secret" "首次生成超管密码时应在摘要中回显一次"
   assert_contains "$summary" "注册入口默认状态：关闭" "部署摘要应提示注册入口默认关闭"
   assert_contains "$summary" "本次部署耗时：1574 秒" "部署摘要应显示本次部署耗时"
   assert_contains "$summary" "后端镜像大小：1.93GB" "部署摘要应显示后端镜像大小"
   assert_contains "$summary" "前端镜像大小：94.7MB" "部署摘要应显示前端镜像大小"
 
   SUPER_ADMIN_PASSWORD_GENERATED=0
+  credential_notice="$(show_super_admin_credentials)"
+  assert_contains "$credential_notice" "超级管理员密码：bootstrap-secret" "复用既有超管密码时提示也应继续明文输出"
+  assert_contains "$credential_notice" "脚本本次未重置" "复用既有超管密码时应明确说明密码未被重置"
   summary="$(show_summary)"
-  assert_contains "$summary" "超级管理员密码：本次未重置" "重跑脚本时不应再次明文输出旧超管密码"
+  assert_contains "$summary" "超级管理员密码：bootstrap-secret" "重跑脚本时摘要也应继续明文输出当前超管密码"
+  assert_contains "$summary" "脚本本次未重置" "重跑脚本时摘要应说明密码沿用现有初始化配置"
 
   printf 'deploy.sh 测试通过。\n'
 }

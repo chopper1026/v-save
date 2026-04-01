@@ -1245,6 +1245,16 @@ deploy_stack() {
   log_success '前后端容器已全部启动。'
 }
 
+show_super_admin_credentials() {
+  printf '超级管理员邮箱：%s\n' "$SUPER_ADMIN_BOOTSTRAP_EMAIL"
+  printf '超级管理员密码：%s\n' "$SUPER_ADMIN_BOOTSTRAP_PASSWORD"
+  if [[ "$SUPER_ADMIN_PASSWORD_GENERATED" -eq 1 ]]; then
+    printf '提示：该密码为本次新生成的初始化密码，请登录后尽快修改。\n'
+  else
+    printf '提示：该密码沿用现有初始化配置，脚本本次未重置。\n'
+  fi
+}
+
 show_summary() {
   printf '\n'
   printf '========================================\n'
@@ -1257,13 +1267,7 @@ show_summary() {
   printf '数据库用户名：%s\n' "$MYSQL_USER"
   printf '数据库密码：%s\n' "$MYSQL_PASSWORD"
   printf '数据库 Root 密码：%s\n' "$MYSQL_ROOT_PASSWORD"
-  printf '超级管理员邮箱：%s\n' "$SUPER_ADMIN_BOOTSTRAP_EMAIL"
-  if [[ "$SUPER_ADMIN_PASSWORD_GENERATED" -eq 1 ]]; then
-    printf '超级管理员初始密码：%s\n' "$SUPER_ADMIN_BOOTSTRAP_PASSWORD"
-    printf '提示：该密码只在首次初始化时会写入数据库，请登录后尽快修改。\n'
-  else
-    printf '超级管理员密码：本次未重置，已保留现有初始化配置，出于安全考虑不再明文输出。\n'
-  fi
+  show_super_admin_credentials
   printf '本次部署耗时：%s\n' "$(format_duration_seconds "$DEPLOY_DURATION_SECONDS" | tr -d '\n')"
   printf '后端镜像大小：%s\n' "${BACKEND_IMAGE_SIZE:-未获取}"
   printf '前端镜像大小：%s\n' "${FRONTEND_IMAGE_SIZE:-未获取}"
@@ -1368,6 +1372,10 @@ main() {
   load_or_generate_env
   validate_prebuilt_image_settings
   write_env_files
+  printf '\n'
+  log_info '已写入超级管理员初始化登录信息。即使后续容器启动失败，也可以继续使用下面的账号密码登录：'
+  show_super_admin_credentials
+  printf '\n'
   deploy_stack
   show_summary
 }
