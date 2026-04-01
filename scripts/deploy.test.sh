@@ -184,6 +184,8 @@ main() {
   assert_eq "$PREBUILT_BACKEND_IMAGE" "chopper1026/v-save-backend" "一键部署应默认使用官方后端镜像"
   assert_eq "$PREBUILT_FRONTEND_IMAGE" "chopper1026/v-save-frontend" "一键部署应默认使用官方前端镜像"
   assert_eq "$PREBUILT_IMAGE_TAG" "latest" "一键部署应默认拉取 latest 镜像"
+  assert_eq "$FRONTEND_PORT" "7752" "一键部署应默认使用 7752 端口暴露前端，避免占用 80"
+  assert_eq "$BACKEND_PORT" "7753" "一键部署应默认使用 7753 端口暴露后端"
   assert_eq "$SUPER_ADMIN_BOOTSTRAP_EMAIL" "admin@gmail.com" "应为一键部署提供默认超管邮箱"
   assert_eq "$SUPER_ADMIN_BOOTSTRAP_NICKNAME" "系统管理员" "应为一键部署提供默认超管昵称"
   assert_contains "$SUPER_ADMIN_EMAILS" "admin@gmail.com" "超级管理员邮箱列表应至少包含 bootstrap 邮箱"

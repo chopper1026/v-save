@@ -34,7 +34,7 @@ services:
       - ./backend/.env
     restart: always
     ports:
-      - "${BACKEND_PORT:-3001}:3001"
+      - "${BACKEND_PORT:-7753}:3001"
     environment:
       DATABASE_TYPE: mysql
       DATABASE_HOST: ${DATABASE_HOST:-host.docker.internal}
@@ -46,8 +46,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
       PORT: 3001
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:3000,http://127.0.0.1:3000,http://localhost:4871,http://127.0.0.1:4871}
-      WEB_PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN:-http://localhost:4871}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:3000,http://127.0.0.1:3000,http://localhost:7752,http://127.0.0.1:7752}
+      WEB_PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN:-http://localhost:7752}
       FFMPEG_PATH: ${FFMPEG_PATH:-ffmpeg}
       YTDLP_PATH: ${YTDLP_PATH:-yt-dlp}
       NODE_OPTIONS: ${NODE_OPTIONS:---max-old-space-size=768 --dns-result-order=ipv4first}
@@ -75,7 +75,7 @@ services:
     container_name: v-save-frontend
     restart: always
     ports:
-      - "${FRONTEND_PORT:-4871}:80"
+      - "${FRONTEND_PORT:-7752}:80"
     environment:
       TZ: ${TZ:-Asia/Shanghai}
     depends_on:
