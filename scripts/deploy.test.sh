@@ -293,6 +293,7 @@ EOF
   reuse_marker="${archive_root}/download-called"
   mkdir -p "${reuse_target}/backend" "${reuse_target}/frontend"
   : > "${reuse_target}/docker-compose.yml"
+  : > "${reuse_target}/docker-compose.release.yml"
   USER_INSTALL_DIR="$reuse_target"
   FORCE_REFRESH_REPO=0
   REPO_DIR=""
@@ -323,6 +324,7 @@ EOF
   printf 'old-root-env\n' > "${refresh_target}/.env"
   printf 'old-backend-env\n' > "${refresh_target}/backend/.env"
   : > "${refresh_target}/docker-compose.yml"
+  : > "${refresh_target}/docker-compose.release.yml"
   USER_INSTALL_DIR="$refresh_target"
   FORCE_REFRESH_REPO=1
   REPO_DIR=""
@@ -345,11 +347,45 @@ EOF
   fi
   rm -rf "$refresh_root"
 
+  local stale_archive_root stale_archive_target stale_archive_marker
+  stale_archive_root="$(mktemp -d)"
+  stale_archive_target="${stale_archive_root}/v-save"
+  stale_archive_marker="${stale_archive_root}/download-called"
+  mkdir -p "${stale_archive_target}/backend" "${stale_archive_target}/frontend"
+  printf 'keep-root-env\n' > "${stale_archive_target}/.env"
+  printf 'keep-backend-env\n' > "${stale_archive_target}/backend/.env"
+  : > "${stale_archive_target}/docker-compose.yml"
+  USER_INSTALL_DIR="$stale_archive_target"
+  FORCE_REFRESH_REPO=0
+  REPO_DIR=""
+  download_repo_archive() {
+    local target_dir="$1"
+    rm -rf "$target_dir"
+    mkdir -p "${target_dir}/backend" "${target_dir}/frontend"
+    : > "${target_dir}/docker-compose.yml"
+    : > "${target_dir}/docker-compose.release.yml"
+    : > "$stale_archive_marker"
+  }
+  pushd "$stale_archive_root" >/dev/null
+  ensure_repo_checkout
+  popd >/dev/null
+  assert_eq "$REPO_DIR" "$stale_archive_target" "旧版解压仓库缺少 release compose 时应自动刷新到新版目录"
+  assert_eq "$(cat "${stale_archive_target}/.env")" "keep-root-env" "自动刷新旧版解压仓库时应保留根目录 .env"
+  assert_eq "$(cat "${stale_archive_target}/backend/.env")" "keep-backend-env" "自动刷新旧版解压仓库时应保留 backend/.env"
+  if [[ ! -f "$stale_archive_marker" ]]; then
+    printf '断言失败：旧版解压仓库缺少 release compose 时应自动重新下载压缩包。\n' >&2
+    exit 1
+  fi
+  rm -rf "$stale_archive_root"
+
   local git_reuse_root git_reuse_target git_reuse_log
   git_reuse_root="$(mktemp -d)"
   git_reuse_target="${git_reuse_root}/v-save"
   git_reuse_log="${git_reuse_root}/git.log"
   mkdir -p "${git_reuse_target}/.git"
+  mkdir -p "${git_reuse_target}/backend" "${git_reuse_target}/frontend"
+  : > "${git_reuse_target}/docker-compose.yml"
+  : > "${git_reuse_target}/docker-compose.release.yml"
   USER_INSTALL_DIR="$git_reuse_target"
   FORCE_REFRESH_REPO=0
   REPO_DIR=""
@@ -366,11 +402,38 @@ EOF
   fi
   rm -rf "$git_reuse_root"
 
+  local stale_git_root stale_git_target stale_git_log
+  stale_git_root="$(mktemp -d)"
+  stale_git_target="${stale_git_root}/v-save"
+  stale_git_log="${stale_git_root}/git.log"
+  mkdir -p "${stale_git_target}/.git"
+  : > "${stale_git_target}/docker-compose.yml"
+  mkdir -p "${stale_git_target}/backend" "${stale_git_target}/frontend"
+  USER_INSTALL_DIR="$stale_git_target"
+  FORCE_REFRESH_REPO=0
+  REPO_DIR=""
+  git() {
+    printf '%s\n' "$*" >> "$stale_git_log"
+    if [[ "$1" == "-C" && "$3" == "pull" ]]; then
+      : > "${stale_git_target}/docker-compose.release.yml"
+    fi
+  }
+  pushd "$stale_git_root" >/dev/null
+  ensure_repo_checkout
+  popd >/dev/null
+  assert_eq "$REPO_DIR" "$stale_git_target" "旧版 git 仓库缺少 release compose 时应自动刷新到新版目录"
+  assert_contains "$(cat "$stale_git_log")" "-C ${stale_git_target} fetch --all --prune" "旧版 git 仓库缺少 release compose 时应自动执行 git fetch"
+  assert_contains "$(cat "$stale_git_log")" "-C ${stale_git_target} pull --ff-only" "旧版 git 仓库缺少 release compose 时应自动执行 git pull"
+  rm -rf "$stale_git_root"
+
   local git_refresh_root git_refresh_target git_refresh_log
   git_refresh_root="$(mktemp -d)"
   git_refresh_target="${git_refresh_root}/v-save"
   git_refresh_log="${git_refresh_root}/git.log"
   mkdir -p "${git_refresh_target}/.git"
+  mkdir -p "${git_refresh_target}/backend" "${git_refresh_target}/frontend"
+  : > "${git_refresh_target}/docker-compose.yml"
+  : > "${git_refresh_target}/docker-compose.release.yml"
   USER_INSTALL_DIR="$git_refresh_target"
   FORCE_REFRESH_REPO=1
   REPO_DIR=""
