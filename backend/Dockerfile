@@ -34,10 +34,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
 
 COPY package*.json ./
 RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
- && npm ci
-
-COPY . .
-RUN npm run build \
+ && npm ci \
  && python3 -m venv /opt/douyin-python \
  && if [ -n "$PIP_INDEX_URL" ]; then \
       /opt/douyin-python/bin/pip install --no-cache-dir -i "$PIP_INDEX_URL" --upgrade pip; \
@@ -45,7 +42,10 @@ RUN npm run build \
     else \
       /opt/douyin-python/bin/pip install --no-cache-dir --upgrade pip; \
       /opt/douyin-python/bin/pip install --no-cache-dir gmssl; \
-    fi \
+    fi
+
+COPY . .
+RUN npm run build \
  && npm prune --omit=dev \
  && npm cache clean --force \
  && rm -rf /root/.npm \

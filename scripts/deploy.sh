@@ -18,6 +18,10 @@ USER_REPO_ARCHIVE_URL="${V_SAVE_REPO_ARCHIVE_URL:-$REPO_ARCHIVE_URL_DEFAULT}"
 USER_INSTALL_DIR="${V_SAVE_INSTALL_DIR:-}"
 USER_PUBLIC_HOST="${V_SAVE_PUBLIC_HOST:-}"
 FORCE_REGION="${V_SAVE_FORCE_REGION:-}"
+USE_PREBUILT_IMAGES="${V_SAVE_USE_PREBUILT_IMAGES:-}"
+PREBUILT_BACKEND_IMAGE="${V_SAVE_BACKEND_IMAGE:-}"
+PREBUILT_FRONTEND_IMAGE="${V_SAVE_FRONTEND_IMAGE:-}"
+PREBUILT_IMAGE_TAG="${V_SAVE_IMAGE_TAG:-}"
 
 REPO_DIR=""
 DEPLOY_HOST=""
@@ -49,6 +53,7 @@ USE_CN_MIRROR=0
 
 DOCKER_SUDO=()
 USE_DOCKER_COMPOSE_STANDALONE=0
+REPO_CHANGED=0
 
 log_info() {
   printf '[信息] %s\n' "$*"
@@ -108,6 +113,19 @@ is_yes_answer() {
   local answer
   answer="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]' | xargs)"
   [[ -z "$answer" || "$answer" == "y" || "$answer" == "yes" || "$answer" == "是" ]]
+}
+
+normalize_flag_value() {
+  local answer
+  answer="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]' | xargs)"
+  case "$answer" in
+    1|y|yes|true|on|是)
+      printf '1\n'
+      ;;
+    *)
+      printf '0\n'
+      ;;
+  esac
 }
 
 build_http_origin() {
@@ -415,10 +433,15 @@ ensure_sudo_prefix() {
 }
 
 compose_cmd() {
+  local -a compose_file_args=()
+  if [[ "${USE_PREBUILT_IMAGES:-0}" -eq 1 ]]; then
+    compose_file_args=(-f docker-compose.release.yml)
+  fi
+
   if [[ "$USE_DOCKER_COMPOSE_STANDALONE" -eq 1 ]]; then
-    "${DOCKER_SUDO[@]}" docker-compose "$@"
+    "${DOCKER_SUDO[@]}" docker-compose "${compose_file_args[@]}" "$@"
   else
-    "${DOCKER_SUDO[@]}" docker compose "$@"
+    "${DOCKER_SUDO[@]}" docker compose "${compose_file_args[@]}" "$@"
   fi
 }
 
@@ -780,6 +803,7 @@ refresh_repo_archive_preserve_state() {
 ensure_repo_checkout() {
   if is_repo_checkout_dir "."; then
     REPO_DIR="$(pwd)"
+    REPO_CHANGED=1
     log_info "检测到当前目录已是 ${PROJECT_NAME} 仓库，直接在本地执行部署。"
     return
   fi
@@ -789,8 +813,14 @@ ensure_repo_checkout() {
 
   if [[ -d "$target_dir/.git" ]]; then
     log_info "检测到已有仓库副本：${target_dir}"
-    git -C "$target_dir" fetch --all --prune >/dev/null
-    git -C "$target_dir" pull --ff-only >/dev/null
+    if [[ "$FORCE_REFRESH_REPO" -eq 1 ]]; then
+      git -C "$target_dir" fetch --all --prune >/dev/null
+      git -C "$target_dir" pull --ff-only >/dev/null
+      REPO_CHANGED=1
+    else
+      log_info '未指定 --refresh-repo，默认复用当前 git 仓库代码。'
+      REPO_CHANGED=0
+    fi
     REPO_DIR="$target_dir"
     return
   fi
@@ -799,8 +829,10 @@ ensure_repo_checkout() {
     if [[ "$FORCE_REFRESH_REPO" -eq 1 ]]; then
       log_info "检测到已有解压仓库副本：${target_dir}，按要求刷新最新代码并保留现有配置。"
       refresh_repo_archive_preserve_state "$target_dir"
+      REPO_CHANGED=1
     else
       log_info "检测到已有解压仓库副本：${target_dir}，复用现有目录。"
+      REPO_CHANGED=0
     fi
     REPO_DIR="$target_dir"
     return
@@ -813,12 +845,14 @@ ensure_repo_checkout() {
       rm -rf "$target_dir"
     fi
     git clone --depth 1 "$USER_REPO_URL" "$target_dir" >/dev/null
+    REPO_CHANGED=1
     REPO_DIR="$target_dir"
     return
   fi
 
   log_warn '系统未检测到 git，改用压缩包方式下载仓库。'
   download_repo_archive "$target_dir"
+  REPO_CHANGED=1
   REPO_DIR="$target_dir"
 }
 
@@ -877,6 +911,11 @@ load_or_generate_env() {
   SUPER_ADMIN_BOOTSTRAP_PASSWORD="$(read_preferred_env_value "$state_file" "$env_file" "SUPER_ADMIN_BOOTSTRAP_PASSWORD")"
   SUPER_ADMIN_BOOTSTRAP_NICKNAME="$(read_preferred_env_value "$state_file" "$env_file" "SUPER_ADMIN_BOOTSTRAP_NICKNAME")"
 
+  [[ -n "$USE_PREBUILT_IMAGES" ]] || USE_PREBUILT_IMAGES="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_USE_PREBUILT_IMAGES")"
+  [[ -n "$PREBUILT_BACKEND_IMAGE" ]] || PREBUILT_BACKEND_IMAGE="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_BACKEND_IMAGE")"
+  [[ -n "$PREBUILT_FRONTEND_IMAGE" ]] || PREBUILT_FRONTEND_IMAGE="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_FRONTEND_IMAGE")"
+  [[ -n "$PREBUILT_IMAGE_TAG" ]] || PREBUILT_IMAGE_TAG="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_IMAGE_TAG")"
+
   [[ -n "$FRONTEND_PORT" ]] || FRONTEND_PORT="$(choose_available_port 80 4871 8080 18080)"
   [[ -n "$BACKEND_PORT" ]] || BACKEND_PORT="$(choose_available_port 3001 13001 23001)"
   [[ -n "$MYSQL_PORT" ]] || MYSQL_PORT="$(choose_available_port 3306 13306 23306)"
@@ -895,6 +934,8 @@ load_or_generate_env() {
     SUPER_ADMIN_PASSWORD_GENERATED=1
   fi
   SUPER_ADMIN_EMAILS="$(ensure_super_admin_email_in_list "$SUPER_ADMIN_EMAILS" "$SUPER_ADMIN_BOOTSTRAP_EMAIL")"
+  USE_PREBUILT_IMAGES="$(normalize_flag_value "$USE_PREBUILT_IMAGES")"
+  [[ -n "$PREBUILT_IMAGE_TAG" ]] || PREBUILT_IMAGE_TAG="latest"
 
   PUBLIC_API_ORIGIN="$(build_http_origin "$DEPLOY_HOST" "$BACKEND_PORT")/api"
   WEB_PUBLIC_ORIGIN="$(build_http_origin "$DEPLOY_HOST" "$FRONTEND_PORT")"
@@ -933,6 +974,10 @@ SUPER_ADMIN_EMAILS=${SUPER_ADMIN_EMAILS}
 SUPER_ADMIN_BOOTSTRAP_EMAIL=${SUPER_ADMIN_BOOTSTRAP_EMAIL}
 SUPER_ADMIN_BOOTSTRAP_PASSWORD=${SUPER_ADMIN_BOOTSTRAP_PASSWORD}
 SUPER_ADMIN_BOOTSTRAP_NICKNAME=${SUPER_ADMIN_BOOTSTRAP_NICKNAME}
+V_SAVE_USE_PREBUILT_IMAGES=${USE_PREBUILT_IMAGES}
+V_SAVE_BACKEND_IMAGE=${PREBUILT_BACKEND_IMAGE}
+V_SAVE_FRONTEND_IMAGE=${PREBUILT_FRONTEND_IMAGE}
+V_SAVE_IMAGE_TAG=${PREBUILT_IMAGE_TAG}
 EOF
   chmod 600 "$state_file" 2>/dev/null || true
 }
@@ -969,6 +1014,10 @@ PIP_INDEX_URL=${PIP_INDEX_URL}
 APT_MIRROR=${APT_MIRROR}
 APT_SECURITY_MIRROR=${APT_SECURITY_MIRROR}
 ALPINE_MIRROR=${ALPINE_MIRROR}
+V_SAVE_USE_PREBUILT_IMAGES=${USE_PREBUILT_IMAGES}
+V_SAVE_BACKEND_IMAGE=${PREBUILT_BACKEND_IMAGE}
+V_SAVE_FRONTEND_IMAGE=${PREBUILT_FRONTEND_IMAGE}
+V_SAVE_IMAGE_TAG=${PREBUILT_IMAGE_TAG}
 EOF
 
   cat >"${REPO_DIR}/backend/.env" <<EOF
@@ -1048,6 +1097,56 @@ wait_for_container_ready() {
   return 1
 }
 
+validate_prebuilt_image_settings() {
+  if [[ "${USE_PREBUILT_IMAGES:-0}" -ne 1 ]]; then
+    return 0
+  fi
+
+  [[ -n "$PREBUILT_BACKEND_IMAGE" ]] || die '启用预构建镜像部署时，必须通过 V_SAVE_BACKEND_IMAGE 或 --backend-image 提供后端镜像名。'
+  [[ -n "$PREBUILT_FRONTEND_IMAGE" ]] || die '启用预构建镜像部署时，必须通过 V_SAVE_FRONTEND_IMAGE 或 --frontend-image 提供前端镜像名。'
+  [[ -n "$PREBUILT_IMAGE_TAG" ]] || die '启用预构建镜像部署时，必须通过 V_SAVE_IMAGE_TAG 或 --image-tag 提供镜像 tag。'
+}
+
+compose_cli_prefix() {
+  if [[ "${USE_PREBUILT_IMAGES:-0}" -eq 1 ]]; then
+    printf 'docker compose -f docker-compose.release.yml'
+    return
+  fi
+
+  printf 'docker compose'
+}
+
+get_compose_project_name() {
+  local project_name=""
+  project_name="$(compose_cmd config 2>/dev/null | awk -F': ' '/^name:/ {print $2; exit}')"
+  printf '%s\n' "$project_name"
+}
+
+service_image_exists() {
+  local service_name="$1"
+  local project_name=""
+
+  project_name="$(get_compose_project_name)"
+  [[ -n "$project_name" ]] || return 1
+
+  docker_cmd image inspect "${project_name}-${service_name}:latest" >/dev/null 2>&1
+}
+
+should_build_service_images() {
+  if [[ "${USE_PREBUILT_IMAGES:-0}" -eq 1 ]]; then
+    return 1
+  fi
+
+  if [[ "${REPO_CHANGED:-0}" -eq 1 ]]; then
+    return 0
+  fi
+
+  service_image_exists backend || return 0
+  service_image_exists frontend || return 0
+
+  return 1
+}
+
 mysql_login_with_current_app_credentials() {
   compose_cmd --profile with-mysql exec -T mysql \
     sh -lc 'MYSQL_PWD="${MYSQL_PASSWORD}" mysql -u"${MYSQL_USER}" -D "${MYSQL_DATABASE}" -Nse "SELECT 1;"' >/dev/null 2>&1
@@ -1095,7 +1194,7 @@ ensure_mysql_credentials() {
   done
 
   if mysql_login_with_current_root_credentials; then
-    die 'MySQL Root 凭据可用，但自动同步应用账号后仍无法登录，请执行 docker compose logs mysql 查看详细信息。'
+    die "MySQL Root 凭据可用，但自动同步应用账号后仍无法登录，请执行 $(compose_cli_prefix) logs mysql 查看详细信息。"
   fi
 
   die '检测到现有 MySQL 数据卷中的凭据与当前配置不一致，且当前 Root 密码无法验证。为避免误删已有数据，脚本已停止。若确认可重置数据，请先备份并删除 mysql_data 卷后重试。'
@@ -1111,19 +1210,28 @@ deploy_stack() {
   log_info '启动 MySQL 容器...'
   compose_cmd --profile with-mysql up -d mysql
   if ! wait_for_container_ready "v-save-mysql" 180; then
-    die 'MySQL 容器启动超时，请执行 docker compose logs mysql 查看原因。'
+    die "MySQL 容器启动超时，请执行 $(compose_cli_prefix) logs mysql 查看原因。"
   fi
   ensure_mysql_credentials
   log_success 'MySQL 容器已就绪。'
 
-  log_info '开始构建并启动后端与前端容器...'
-  compose_cmd --profile with-mysql up -d --build backend frontend
+  if [[ "${USE_PREBUILT_IMAGES:-0}" -eq 1 ]]; then
+    log_info '检测到预构建镜像部署模式，开始拉取后端与前端镜像...'
+    compose_cmd --profile with-mysql pull backend frontend
+    compose_cmd --profile with-mysql up -d backend frontend
+  elif should_build_service_images; then
+    log_info '开始构建并启动后端与前端容器...'
+    compose_cmd --profile with-mysql up -d --build backend frontend
+  else
+    log_info '检测到现有镜像可复用，直接启动后端与前端容器。'
+    compose_cmd --profile with-mysql up -d backend frontend
+  fi
 
   if ! wait_for_container_ready "v-save-backend" 300; then
-    die '后端容器启动超时，请执行 docker compose logs backend 查看原因。'
+    die "后端容器启动超时，请执行 $(compose_cli_prefix) logs backend 查看原因。"
   fi
   if ! wait_for_container_ready "v-save-frontend" 180; then
-    die '前端容器启动超时，请执行 docker compose logs frontend 查看原因。'
+    die "前端容器启动超时，请执行 $(compose_cli_prefix) logs frontend 查看原因。"
   fi
   deploy_finished_at="$(date +%s)"
   DEPLOY_DURATION_SECONDS="$((deploy_finished_at - deploy_started_at))"
@@ -1156,7 +1264,7 @@ show_summary() {
   printf '注册入口默认状态：关闭，可在“后台管理 -> 系统设置”中手动开启。\n'
   printf '配置文件位置：%s/.env\n' "$REPO_DIR"
   printf '\n'
-  printf '如果你需要查看容器状态，请执行：cd %s && docker compose --profile with-mysql ps\n' "$REPO_DIR"
+  printf '如果你需要查看容器状态，请执行：cd %s && %s --profile with-mysql ps\n' "$REPO_DIR" "$(compose_cli_prefix)"
   printf '========================================\n'
 }
 
@@ -1170,6 +1278,25 @@ parse_args() {
       --refresh-repo)
         FORCE_REFRESH_REPO=1
         shift
+        ;;
+      --use-prebuilt-images)
+        USE_PREBUILT_IMAGES=1
+        shift
+        ;;
+      --backend-image)
+        PREBUILT_BACKEND_IMAGE="${2:-}"
+        [[ -n "$PREBUILT_BACKEND_IMAGE" ]] || die '--backend-image 需要跟一个后端镜像名。'
+        shift 2
+        ;;
+      --frontend-image)
+        PREBUILT_FRONTEND_IMAGE="${2:-}"
+        [[ -n "$PREBUILT_FRONTEND_IMAGE" ]] || die '--frontend-image 需要跟一个前端镜像名。'
+        shift 2
+        ;;
+      --image-tag)
+        PREBUILT_IMAGE_TAG="${2:-}"
+        [[ -n "$PREBUILT_IMAGE_TAG" ]] || die '--image-tag 需要跟一个镜像 tag。'
+        shift 2
         ;;
       --install-dir)
         USER_INSTALL_DIR="${2:-}"
@@ -1199,6 +1326,10 @@ parse_args() {
 可选参数：
   -y, --yes              跳过交互确认，默认自动继续
   --refresh-repo         刷新仓库代码；无 git 时会重新下载压缩包并保留现有 .env 配置
+  --use-prebuilt-images  启用预构建镜像部署模式，服务器只拉取现成镜像
+  --backend-image <名称> 指定后端镜像名，例如 yourname/v-save-backend
+  --frontend-image <名称>指定前端镜像名，例如 yourname/v-save-frontend
+  --image-tag <标签>     指定前后端镜像共用的 tag，例如 latest 或 git sha
   --install-dir <目录>   指定仓库落地目录
   --repo-url <地址>      指定仓库 Git 地址
   --public-host <地址>   指定部署完成后展示的访问域名或 IP
@@ -1234,6 +1365,7 @@ main() {
   ensure_repo_checkout
   detect_deploy_host
   load_or_generate_env
+  validate_prebuilt_image_settings
   write_env_files
   deploy_stack
   show_summary

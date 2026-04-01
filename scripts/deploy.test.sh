@@ -24,6 +24,16 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local actual="$1"
+  local unexpected_part="$2"
+  local message="$3"
+  if [[ "$actual" == *"$unexpected_part"* ]]; then
+    printf '断言失败：%s\n不应包含：%s\n实际：%s\n' "$message" "$unexpected_part" "$actual" >&2
+    exit 1
+  fi
+}
+
 main() {
   assert_eq "$(normalize_arch x86_64)" "amd64" "x86_64 应映射到 amd64"
   assert_eq "$(normalize_arch aarch64)" "arm64" "aarch64 应映射到 arm64"
@@ -104,6 +114,20 @@ main() {
   FORCE_REFRESH_REPO=0
   parse_args --refresh-repo
   assert_eq "$FORCE_REFRESH_REPO" "1" "--refresh-repo 应开启仓库刷新开关"
+
+  USE_PREBUILT_IMAGES=0
+  PREBUILT_BACKEND_IMAGE=""
+  PREBUILT_FRONTEND_IMAGE=""
+  PREBUILT_IMAGE_TAG=""
+  parse_args \
+    --use-prebuilt-images \
+    --backend-image yourname/v-save-backend \
+    --frontend-image yourname/v-save-frontend \
+    --image-tag 2026-04-01-test1
+  assert_eq "$USE_PREBUILT_IMAGES" "1" "--use-prebuilt-images 应开启预构建镜像部署模式"
+  assert_eq "$PREBUILT_BACKEND_IMAGE" "yourname/v-save-backend" "--backend-image 应写入后端镜像名"
+  assert_eq "$PREBUILT_FRONTEND_IMAGE" "yourname/v-save-frontend" "--frontend-image 应写入前端镜像名"
+  assert_eq "$PREBUILT_IMAGE_TAG" "2026-04-01-test1" "--image-tag 应写入镜像 tag"
 
   local temp_repo
   temp_repo="$(mktemp -d)"
@@ -201,12 +225,20 @@ EOF
   assert_eq "$SUPER_ADMIN_BOOTSTRAP_NICKNAME" "State Admin" "状态文件应优先生效并保留超管昵称"
   assert_eq "$SUPER_ADMIN_EMAILS" "ops@example.com,state-admin@example.com" "超管邮箱列表应保留原值并补充 bootstrap 邮箱"
   assert_eq "$SUPER_ADMIN_PASSWORD_GENERATED" "0" "已有超管密码时不应重新生成"
+  PREBUILT_BACKEND_IMAGE="yourname/v-save-backend"
+  PREBUILT_FRONTEND_IMAGE="yourname/v-save-frontend"
+  PREBUILT_IMAGE_TAG="2026-04-01-test1"
+  USE_PREBUILT_IMAGES=1
   write_env_files
   assert_contains "$(cat "$state_file")" "MYSQL_PASSWORD=state-pass" "写回配置时应同步刷新状态文件"
   assert_contains "$(cat "${state_repo}/.env")" "MYSQL_PASSWORD=state-pass" "根目录 .env 应与状态文件保持一致"
   assert_contains "$(cat "$state_file")" "SUPER_ADMIN_BOOTSTRAP_PASSWORD=state-admin-pass" "状态文件应同步写回超管初始化密码"
   assert_contains "$(cat "${state_repo}/.env")" "SUPER_ADMIN_BOOTSTRAP_PASSWORD=state-admin-pass" "根目录 .env 应同步写回超管初始化密码"
   assert_contains "$(cat "${state_repo}/backend/.env")" "SUPER_ADMIN_EMAILS=ops@example.com,state-admin@example.com" "backend/.env 应写入合并后的超管邮箱列表"
+  assert_contains "$(cat "$state_file")" "V_SAVE_USE_PREBUILT_IMAGES=1" "状态文件应持久化预构建镜像部署模式开关"
+  assert_contains "$(cat "${state_repo}/.env")" "V_SAVE_BACKEND_IMAGE=yourname/v-save-backend" "根目录 .env 应写入后端预构建镜像名"
+  assert_contains "$(cat "${state_repo}/.env")" "V_SAVE_FRONTEND_IMAGE=yourname/v-save-frontend" "根目录 .env 应写入前端预构建镜像名"
+  assert_contains "$(cat "${state_repo}/.env")" "V_SAVE_IMAGE_TAG=2026-04-01-test1" "根目录 .env 应写入预构建镜像 tag"
   rm -rf "$state_root"
 
   local mysql_reconcile_marker
@@ -307,6 +339,86 @@ EOF
     exit 1
   fi
   rm -rf "$refresh_root"
+
+  local git_reuse_root git_reuse_target git_reuse_log
+  git_reuse_root="$(mktemp -d)"
+  git_reuse_target="${git_reuse_root}/v-save"
+  git_reuse_log="${git_reuse_root}/git.log"
+  mkdir -p "${git_reuse_target}/.git"
+  USER_INSTALL_DIR="$git_reuse_target"
+  FORCE_REFRESH_REPO=0
+  REPO_DIR=""
+  git() {
+    printf '%s\n' "$*" >> "$git_reuse_log"
+  }
+  pushd "$git_reuse_root" >/dev/null
+  ensure_repo_checkout
+  popd >/dev/null
+  assert_eq "$REPO_DIR" "$git_reuse_target" "已有 git 仓库且未显式刷新时应继续复用当前目录"
+  if [[ -f "$git_reuse_log" ]]; then
+    printf '断言失败：默认复用已有 git 仓库时不应自动执行 fetch/pull。\n' >&2
+    exit 1
+  fi
+  rm -rf "$git_reuse_root"
+
+  local git_refresh_root git_refresh_target git_refresh_log
+  git_refresh_root="$(mktemp -d)"
+  git_refresh_target="${git_refresh_root}/v-save"
+  git_refresh_log="${git_refresh_root}/git.log"
+  mkdir -p "${git_refresh_target}/.git"
+  USER_INSTALL_DIR="$git_refresh_target"
+  FORCE_REFRESH_REPO=1
+  REPO_DIR=""
+  git() {
+    printf '%s\n' "$*" >> "$git_refresh_log"
+  }
+  pushd "$git_refresh_root" >/dev/null
+  ensure_repo_checkout
+  popd >/dev/null
+  assert_eq "$REPO_DIR" "$git_refresh_target" "显式刷新已有 git 仓库后应继续使用同一安装目录"
+  assert_contains "$(cat "$git_refresh_log")" "-C ${git_refresh_target} fetch --all --prune" "显式刷新已有 git 仓库时应执行 git fetch"
+  assert_contains "$(cat "$git_refresh_log")" "-C ${git_refresh_target} pull --ff-only" "显式刷新已有 git 仓库时应执行 git pull"
+  rm -rf "$git_refresh_root"
+
+  local deploy_calls
+  deploy_calls="$(mktemp)"
+  REPO_DIR="$(mktemp -d)"
+  wait_for_container_ready() {
+    return 0
+  }
+  ensure_mysql_credentials() {
+    return 0
+  }
+  capture_deploy_artifacts() {
+    return 0
+  }
+  compose_cmd() {
+    printf '%s\n' "$*" >> "$deploy_calls"
+  }
+  should_build_service_images() {
+    return 1
+  }
+  USE_PREBUILT_IMAGES=0
+  deploy_stack
+  assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d mysql" "部署时应先启动 MySQL"
+  assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d backend frontend" "复用现有镜像时不应附带 --build"
+
+  : > "$deploy_calls"
+  should_build_service_images() {
+    return 0
+  }
+  USE_PREBUILT_IMAGES=0
+  deploy_stack
+  assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d --build backend frontend" "需要构建镜像时应显式附带 --build"
+
+  : > "$deploy_calls"
+  USE_PREBUILT_IMAGES=1
+  deploy_stack
+  assert_contains "$(cat "$deploy_calls")" "--profile with-mysql pull backend frontend" "预构建镜像模式应先拉取后端与前端镜像"
+  assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d backend frontend" "预构建镜像模式应直接启动现成镜像"
+  assert_not_contains "$(cat "$deploy_calls")" "--build backend frontend" "预构建镜像模式不应触发本地构建"
+  rm -f "$deploy_calls"
+  rm -rf "$REPO_DIR"
 
   PROJECT_NAME="V-SAVE"
   WEB_PUBLIC_ORIGIN="http://demo.example.com"
