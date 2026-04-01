@@ -28,7 +28,7 @@ services:
       start_period: 20s
 
   backend:
-    image: ${V_SAVE_BACKEND_IMAGE}:${V_SAVE_IMAGE_TAG}
+    image: ${V_SAVE_BACKEND_IMAGE:-chopper1026/v-save-backend}:${V_SAVE_IMAGE_TAG:-latest}
     container_name: v-save-backend
     env_file:
       - ./backend/.env
@@ -71,7 +71,7 @@ services:
       - v-save-network
 
   frontend:
-    image: ${V_SAVE_FRONTEND_IMAGE}:${V_SAVE_IMAGE_TAG}
+    image: ${V_SAVE_FRONTEND_IMAGE:-chopper1026/v-save-frontend}:${V_SAVE_IMAGE_TAG:-latest}
     container_name: v-save-frontend
     restart: always
     ports:

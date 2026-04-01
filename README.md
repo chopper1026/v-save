@@ -53,7 +53,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --install-dir /opt/v-save
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --force-region cn
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --refresh-repo
-bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --use-prebuilt-images --backend-image yourname/v-save-backend --frontend-image yourname/v-save-frontend --image-tag latest
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --image-tag latest
 ```
 
 如果服务器位于中国大陆，脚本会优先从 Docker 官方 GitHub 仓库下载安装脚本，并默认使用 `AzureChinaCloud` 安装镜像。若你需要手动覆盖，可这样执行：
@@ -78,13 +78,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 
 - 如果服务器没有安装 `git`，脚本会使用仓库压缩包部署；再次运行时默认复用现有安装目录，不会每次都重新下载。
 - 如果服务器安装了 `git`，再次运行脚本时也会默认复用当前安装目录中的现有代码；只有显式加上 `--refresh-repo` 时，才会执行 `git fetch && git pull`。
-- 只有显式加上 `--refresh-repo` 时，脚本才会刷新最新代码并重新构建镜像；刷新时会保留现有 `.env` 与 `backend/.env`。默认重跑脚本会尽量复用已有镜像，避免无意义的重复构建。
+- 脚本默认直接拉取 Docker Hub 上的官方 `latest` 镜像部署，不会在服务器本地构建镜像；如果需要固定版本或回滚，可通过 `--image-tag` 或 `V_SAVE_IMAGE_TAG` 指定 tag。
 - 注册入口默认关闭。部署完成后可用自动生成的超管账号登录后台，在“系统设置”里手动开启注册入口。
 - 一键部署默认超管邮箱是 `admin@gmail.com`；密码仅首次生成时会在终端摘要里明文显示一次，后续重跑脚本不会重置也不会再次回显。
 
 ### 方式二：预构建镜像发布到 Docker Hub
 
-适合把镜像在本地或 GitHub Actions 中提前构建好，再让服务器只执行 `pull + up -d`，避免线上机器现场构建镜像。
+适合把镜像在本地或 GitHub Actions 中提前构建好，再让服务器只执行 `pull + up -d`。一键部署脚本现在默认就会走这条路径，并从 Docker Hub 拉取官方镜像。
 
 仓库已提供生产专用 Compose 文件 [`docker-compose.release.yml`](./docker-compose.release.yml) 和 Docker Hub 发布工作流 [`docker-publish.yml`](./.github/workflows/docker-publish.yml)。
 
@@ -108,11 +108,15 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 
 #### 2. 服务器侧使用预构建镜像部署
 
-可以显式传参：
+服务器默认会从 Docker Hub 拉取：
+
+- `chopper1026/v-save-backend:latest`
+- `chopper1026/v-save-frontend:latest`
+
+如果你需要显式覆盖镜像名或 tag，可传参：
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) \
-  --use-prebuilt-images \
   --backend-image yourname/v-save-backend \
   --frontend-image yourname/v-save-frontend \
   --image-tag latest
@@ -121,7 +125,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 也可以先写环境变量，再执行脚本：
 
 ```bash
-export V_SAVE_USE_PREBUILT_IMAGES=1
 export V_SAVE_BACKEND_IMAGE=yourname/v-save-backend
 export V_SAVE_FRONTEND_IMAGE=yourname/v-save-frontend
 export V_SAVE_IMAGE_TAG=latest

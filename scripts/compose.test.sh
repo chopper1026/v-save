@@ -35,8 +35,8 @@ main() {
   local release_compose_text
   release_compose_text="$(cat "$RELEASE_COMPOSE_FILE")"
 
-  assert_contains "$release_compose_text" 'image: ${V_SAVE_BACKEND_IMAGE}:${V_SAVE_IMAGE_TAG}' "生产 compose 应通过镜像名和 tag 拉起后端"
-  assert_contains "$release_compose_text" 'image: ${V_SAVE_FRONTEND_IMAGE}:${V_SAVE_IMAGE_TAG}' "生产 compose 应通过镜像名和 tag 拉起前端"
+  assert_contains "$release_compose_text" 'image: ${V_SAVE_BACKEND_IMAGE:-chopper1026/v-save-backend}:${V_SAVE_IMAGE_TAG:-latest}' "生产 compose 应默认拉取官方后端 latest 镜像，并允许环境变量覆盖"
+  assert_contains "$release_compose_text" 'image: ${V_SAVE_FRONTEND_IMAGE:-chopper1026/v-save-frontend}:${V_SAVE_IMAGE_TAG:-latest}' "生产 compose 应默认拉取官方前端 latest 镜像，并允许环境变量覆盖"
   assert_contains "$release_compose_text" "/api/healthz" "生产 compose 的 backend healthcheck 应保留显式健康探测"
   assert_not_contains "$release_compose_text" "build:" "生产 compose 不应再要求服务器本地构建镜像"
 
