@@ -376,8 +376,19 @@ get_country_code() {
   done
 }
 
+docker_registry_is_reachable() {
+  local status_code=""
+
+  if ! status_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 https://registry-1.docker.io/v2/ 2>/dev/null)"; then
+    return 1
+  fi
+
+  [[ "$status_code" == "200" || "$status_code" == "401" ]]
+}
+
 detect_china_mainland() {
-  local forced="${FORCE_REGION,,}"
+  local forced=""
+  forced="$(printf '%s' "${FORCE_REGION:-}" | tr '[:upper:]' '[:lower:]')"
   if [[ "$forced" == "cn" ]]; then
     return 0
   fi
@@ -387,12 +398,12 @@ detect_china_mainland() {
 
   local country=""
   country="$(get_country_code || true)"
-  if [[ "${country^^}" == "CN" ]]; then
+  if [[ "$(printf '%s' "$country" | tr '[:lower:]' '[:upper:]')" == "CN" ]]; then
     return 0
   fi
 
   if curl -fsSL --max-time 4 https://www.baidu.com >/dev/null 2>&1 \
-    && ! curl -fsSL --max-time 4 https://registry-1.docker.io/v2/ >/dev/null 2>&1; then
+    && ! docker_registry_is_reachable; then
     return 0
   fi
 

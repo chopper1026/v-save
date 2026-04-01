@@ -60,6 +60,33 @@ main() {
     exit 1
   fi
 
+  FORCE_REGION=""
+  curl() {
+    local last_arg="${*: -1}"
+    case "$last_arg" in
+      https://ipapi.co/country/)
+        printf 'US\n'
+        return 0
+        ;;
+      https://www.baidu.com)
+        return 0
+        ;;
+      https://registry-1.docker.io/v2/)
+        if [[ "$*" == *"%{http_code}"* ]]; then
+          printf '401'
+          return 0
+        fi
+        return 22
+        ;;
+    esac
+    return 1
+  }
+  if detect_china_mainland; then
+    printf '断言失败：美国机器即使访问百度成功，只要 Docker Hub Registry 返回 401 也不应误判为中国大陆网络。\n' >&2
+    exit 1
+  fi
+  unset -f curl
+
   USE_CN_MIRROR=1
   assert_eq \
     "$(get_docker_install_script_url)" \
