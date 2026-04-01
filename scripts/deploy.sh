@@ -777,6 +777,11 @@ is_repo_checkout_dir() {
   [[ -f "${target_dir}/docker-compose.yml" && -d "${target_dir}/backend" && -d "${target_dir}/frontend" ]]
 }
 
+is_release_deploy_ready_dir() {
+  local target_dir="$1"
+  [[ -f "${target_dir}/docker-compose.release.yml" ]]
+}
+
 refresh_repo_archive_preserve_state() {
   local target_dir="$1"
   local backup_dir
@@ -820,6 +825,11 @@ ensure_repo_checkout() {
       git -C "$target_dir" fetch --all --prune >/dev/null
       git -C "$target_dir" pull --ff-only >/dev/null
       REPO_CHANGED=1
+    elif ! is_release_deploy_ready_dir "$target_dir"; then
+      log_warn "检测到已有仓库副本缺少 docker-compose.release.yml，正在自动刷新到支持预构建镜像部署的版本：${target_dir}"
+      git -C "$target_dir" fetch --all --prune >/dev/null
+      git -C "$target_dir" pull --ff-only >/dev/null
+      REPO_CHANGED=1
     else
       log_info '未指定 --refresh-repo，默认复用当前 git 仓库代码。'
       REPO_CHANGED=0
@@ -831,6 +841,10 @@ ensure_repo_checkout() {
   if is_repo_checkout_dir "$target_dir"; then
     if [[ "$FORCE_REFRESH_REPO" -eq 1 ]]; then
       log_info "检测到已有解压仓库副本：${target_dir}，按要求刷新最新代码并保留现有配置。"
+      refresh_repo_archive_preserve_state "$target_dir"
+      REPO_CHANGED=1
+    elif ! is_release_deploy_ready_dir "$target_dir"; then
+      log_warn "检测到已有解压仓库副本缺少 docker-compose.release.yml，正在自动刷新到支持预构建镜像部署的版本：${target_dir}"
       refresh_repo_archive_preserve_state "$target_dir"
       REPO_CHANGED=1
     else
