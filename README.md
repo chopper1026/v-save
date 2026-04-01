@@ -53,6 +53,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --install-dir /opt/v-save
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --force-region cn
 bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --refresh-repo
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) --use-prebuilt-images --backend-image yourname/v-save-backend --frontend-image yourname/v-save-frontend --image-tag latest
 ```
 
 如果服务器位于中国大陆，脚本会优先从 Docker 官方 GitHub 仓库下载安装脚本，并默认使用 `AzureChinaCloud` 安装镜像。若你需要手动覆盖，可这样执行：
@@ -76,11 +77,67 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 补充说明：
 
 - 如果服务器没有安装 `git`，脚本会使用仓库压缩包部署；再次运行时默认复用现有安装目录，不会每次都重新下载。
-- 只有显式加上 `--refresh-repo` 时，脚本才会重新下载最新压缩包；刷新时会保留现有 `.env` 与 `backend/.env`。
+- 如果服务器安装了 `git`，再次运行脚本时也会默认复用当前安装目录中的现有代码；只有显式加上 `--refresh-repo` 时，才会执行 `git fetch && git pull`。
+- 只有显式加上 `--refresh-repo` 时，脚本才会刷新最新代码并重新构建镜像；刷新时会保留现有 `.env` 与 `backend/.env`。默认重跑脚本会尽量复用已有镜像，避免无意义的重复构建。
 - 注册入口默认关闭。部署完成后可用自动生成的超管账号登录后台，在“系统设置”里手动开启注册入口。
 - 一键部署默认超管邮箱是 `admin@gmail.com`；密码仅首次生成时会在终端摘要里明文显示一次，后续重跑脚本不会重置也不会再次回显。
 
-### 方式二：源码开发
+### 方式二：预构建镜像发布到 Docker Hub
+
+适合把镜像在本地或 GitHub Actions 中提前构建好，再让服务器只执行 `pull + up -d`，避免线上机器现场构建镜像。
+
+仓库已提供生产专用 Compose 文件 [`docker-compose.release.yml`](./docker-compose.release.yml) 和 Docker Hub 发布工作流 [`docker-publish.yml`](./.github/workflows/docker-publish.yml)。
+
+#### 1. 配置 GitHub Actions
+
+在 GitHub 仓库中准备下面这些配置：
+
+- Secrets:
+  - `DOCKERHUB_USERNAME`
+  - `DOCKERHUB_TOKEN`
+- Variables:
+  - `V_SAVE_BACKEND_IMAGE`，例如 `yourname/v-save-backend`
+  - `V_SAVE_FRONTEND_IMAGE`，例如 `yourname/v-save-frontend`
+  - 可选：`V_SAVE_NPM_REGISTRY`、`V_SAVE_APT_MIRROR`、`V_SAVE_APT_SECURITY_MIRROR`、`V_SAVE_PIP_INDEX_URL`、`V_SAVE_ALPINE_MIRROR`、`V_SAVE_VITE_API_BASE_URL`
+
+工作流会在推送 `main` 分支或 `v*` tag 时，自动构建并推送多架构镜像到 Docker Hub，同时生成：
+
+- `latest`
+- Git commit short SHA
+- Git tag 名（仅 tag 发布时）
+
+#### 2. 服务器侧使用预构建镜像部署
+
+可以显式传参：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh) \
+  --use-prebuilt-images \
+  --backend-image yourname/v-save-backend \
+  --frontend-image yourname/v-save-frontend \
+  --image-tag latest
+```
+
+也可以先写环境变量，再执行脚本：
+
+```bash
+export V_SAVE_USE_PREBUILT_IMAGES=1
+export V_SAVE_BACKEND_IMAGE=yourname/v-save-backend
+export V_SAVE_FRONTEND_IMAGE=yourname/v-save-frontend
+export V_SAVE_IMAGE_TAG=latest
+
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh)
+```
+
+启用该模式后，服务器只会：
+
+- 拉起 `mysql`
+- `pull` 后端与前端镜像
+- 使用 `docker-compose.release.yml` 启动容器
+
+如果需要回滚，只要把 `V_SAVE_IMAGE_TAG` 改成旧版本 tag 或旧的 git SHA，再重新执行脚本。
+
+### 方式三：源码开发
 
 #### 1. 安装依赖
 

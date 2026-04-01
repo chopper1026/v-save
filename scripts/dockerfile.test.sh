@@ -25,6 +25,20 @@ assert_not_contains() {
   fi
 }
 
+assert_before() {
+  local actual="$1"
+  local first="$2"
+  local second="$3"
+  local message="$4"
+  local first_line second_line
+  first_line="$(printf '%s\n' "$actual" | nl -ba | awk -v needle="$first" '$0 ~ needle { print $1; exit }')"
+  second_line="$(printf '%s\n' "$actual" | nl -ba | awk -v needle="$second" '$0 ~ needle { print $1; exit }')"
+  if [[ -z "$first_line" || -z "$second_line" || "$first_line" -ge "$second_line" ]]; then
+    printf '断言失败：%s\n应满足顺序：%s 在 %s 之前。\n' "$message" "$first" "$second" >&2
+    exit 1
+  fi
+}
+
 main() {
   local builder_block
   builder_block="$(awk '
@@ -41,6 +55,7 @@ main() {
   assert_contains "$builder_block" "npm cache clean --force" "backend builder 阶段必须清理 npm cache"
   assert_contains "$builder_block" "rm -rf /root/.npm" "backend builder 阶段必须删除 npm 缓存目录"
   assert_contains "$builder_block" "find dist -type f" "backend builder 阶段必须清理 dist 中无用的 map 和声明文件"
+  assert_before "$builder_block" "pip install --no-cache-dir gmssl" "COPY . ." "gmssl 依赖层应放在复制业务源码之前，避免普通代码改动导致重复安装 Python 依赖"
 
   local runner_block
   runner_block="$(awk '
