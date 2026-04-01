@@ -10,6 +10,9 @@ DEFAULT_INSTALL_DIR_USER="${HOME}/${PROJECT_SLUG}"
 DEFAULT_DB_NAME="v_save"
 DEFAULT_DB_USER="vsave_user"
 DEFAULT_TIMEZONE="Asia/Shanghai"
+DEFAULT_BACKEND_IMAGE="chopper1026/v-save-backend"
+DEFAULT_FRONTEND_IMAGE="chopper1026/v-save-frontend"
+DEFAULT_IMAGE_TAG="latest"
 
 FORCE_YES=0
 FORCE_REFRESH_REPO=0
@@ -18,10 +21,10 @@ USER_REPO_ARCHIVE_URL="${V_SAVE_REPO_ARCHIVE_URL:-$REPO_ARCHIVE_URL_DEFAULT}"
 USER_INSTALL_DIR="${V_SAVE_INSTALL_DIR:-}"
 USER_PUBLIC_HOST="${V_SAVE_PUBLIC_HOST:-}"
 FORCE_REGION="${V_SAVE_FORCE_REGION:-}"
-USE_PREBUILT_IMAGES="${V_SAVE_USE_PREBUILT_IMAGES:-}"
-PREBUILT_BACKEND_IMAGE="${V_SAVE_BACKEND_IMAGE:-}"
-PREBUILT_FRONTEND_IMAGE="${V_SAVE_FRONTEND_IMAGE:-}"
-PREBUILT_IMAGE_TAG="${V_SAVE_IMAGE_TAG:-}"
+USE_PREBUILT_IMAGES=1
+PREBUILT_BACKEND_IMAGE="${V_SAVE_BACKEND_IMAGE:-$DEFAULT_BACKEND_IMAGE}"
+PREBUILT_FRONTEND_IMAGE="${V_SAVE_FRONTEND_IMAGE:-$DEFAULT_FRONTEND_IMAGE}"
+PREBUILT_IMAGE_TAG="${V_SAVE_IMAGE_TAG:-$DEFAULT_IMAGE_TAG}"
 
 REPO_DIR=""
 DEPLOY_HOST=""
@@ -911,7 +914,6 @@ load_or_generate_env() {
   SUPER_ADMIN_BOOTSTRAP_PASSWORD="$(read_preferred_env_value "$state_file" "$env_file" "SUPER_ADMIN_BOOTSTRAP_PASSWORD")"
   SUPER_ADMIN_BOOTSTRAP_NICKNAME="$(read_preferred_env_value "$state_file" "$env_file" "SUPER_ADMIN_BOOTSTRAP_NICKNAME")"
 
-  [[ -n "$USE_PREBUILT_IMAGES" ]] || USE_PREBUILT_IMAGES="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_USE_PREBUILT_IMAGES")"
   [[ -n "$PREBUILT_BACKEND_IMAGE" ]] || PREBUILT_BACKEND_IMAGE="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_BACKEND_IMAGE")"
   [[ -n "$PREBUILT_FRONTEND_IMAGE" ]] || PREBUILT_FRONTEND_IMAGE="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_FRONTEND_IMAGE")"
   [[ -n "$PREBUILT_IMAGE_TAG" ]] || PREBUILT_IMAGE_TAG="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_IMAGE_TAG")"
@@ -934,8 +936,10 @@ load_or_generate_env() {
     SUPER_ADMIN_PASSWORD_GENERATED=1
   fi
   SUPER_ADMIN_EMAILS="$(ensure_super_admin_email_in_list "$SUPER_ADMIN_EMAILS" "$SUPER_ADMIN_BOOTSTRAP_EMAIL")"
-  USE_PREBUILT_IMAGES="$(normalize_flag_value "$USE_PREBUILT_IMAGES")"
-  [[ -n "$PREBUILT_IMAGE_TAG" ]] || PREBUILT_IMAGE_TAG="latest"
+  USE_PREBUILT_IMAGES=1
+  [[ -n "$PREBUILT_BACKEND_IMAGE" ]] || PREBUILT_BACKEND_IMAGE="$DEFAULT_BACKEND_IMAGE"
+  [[ -n "$PREBUILT_FRONTEND_IMAGE" ]] || PREBUILT_FRONTEND_IMAGE="$DEFAULT_FRONTEND_IMAGE"
+  [[ -n "$PREBUILT_IMAGE_TAG" ]] || PREBUILT_IMAGE_TAG="$DEFAULT_IMAGE_TAG"
 
   PUBLIC_API_ORIGIN="$(build_http_origin "$DEPLOY_HOST" "$BACKEND_PORT")/api"
   WEB_PUBLIC_ORIGIN="$(build_http_origin "$DEPLOY_HOST" "$FRONTEND_PORT")"
@@ -1133,10 +1137,6 @@ service_image_exists() {
 }
 
 should_build_service_images() {
-  if [[ "${USE_PREBUILT_IMAGES:-0}" -eq 1 ]]; then
-    return 1
-  fi
-
   if [[ "${REPO_CHANGED:-0}" -eq 1 ]]; then
     return 0
   fi
@@ -1215,17 +1215,9 @@ deploy_stack() {
   ensure_mysql_credentials
   log_success 'MySQL 容器已就绪。'
 
-  if [[ "${USE_PREBUILT_IMAGES:-0}" -eq 1 ]]; then
-    log_info '检测到预构建镜像部署模式，开始拉取后端与前端镜像...'
-    compose_cmd --profile with-mysql pull backend frontend
-    compose_cmd --profile with-mysql up -d backend frontend
-  elif should_build_service_images; then
-    log_info '开始构建并启动后端与前端容器...'
-    compose_cmd --profile with-mysql up -d --build backend frontend
-  else
-    log_info '检测到现有镜像可复用，直接启动后端与前端容器。'
-    compose_cmd --profile with-mysql up -d backend frontend
-  fi
+  log_info "开始拉取后端与前端最新镜像（tag: ${PREBUILT_IMAGE_TAG}）..."
+  compose_cmd --profile with-mysql pull backend frontend
+  compose_cmd --profile with-mysql up -d backend frontend
 
   if ! wait_for_container_ready "v-save-backend" 300; then
     die "后端容器启动超时，请执行 $(compose_cli_prefix) logs backend 查看原因。"
@@ -1279,10 +1271,6 @@ parse_args() {
         FORCE_REFRESH_REPO=1
         shift
         ;;
-      --use-prebuilt-images)
-        USE_PREBUILT_IMAGES=1
-        shift
-        ;;
       --backend-image)
         PREBUILT_BACKEND_IMAGE="${2:-}"
         [[ -n "$PREBUILT_BACKEND_IMAGE" ]] || die '--backend-image 需要跟一个后端镜像名。'
@@ -1326,10 +1314,9 @@ parse_args() {
 可选参数：
   -y, --yes              跳过交互确认，默认自动继续
   --refresh-repo         刷新仓库代码；无 git 时会重新下载压缩包并保留现有 .env 配置
-  --use-prebuilt-images  启用预构建镜像部署模式，服务器只拉取现成镜像
-  --backend-image <名称> 指定后端镜像名，例如 yourname/v-save-backend
-  --frontend-image <名称>指定前端镜像名，例如 yourname/v-save-frontend
-  --image-tag <标签>     指定前后端镜像共用的 tag，例如 latest 或 git sha
+  --backend-image <名称> 指定后端镜像名，默认使用官方 Docker Hub 镜像
+  --frontend-image <名称>指定前端镜像名，默认使用官方 Docker Hub 镜像
+  --image-tag <标签>     指定前后端镜像共用的 tag，默认拉取 latest
   --install-dir <目录>   指定仓库落地目录
   --repo-url <地址>      指定仓库 Git 地址
   --public-host <地址>   指定部署完成后展示的访问域名或 IP

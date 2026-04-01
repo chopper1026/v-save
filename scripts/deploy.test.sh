@@ -115,16 +115,13 @@ main() {
   parse_args --refresh-repo
   assert_eq "$FORCE_REFRESH_REPO" "1" "--refresh-repo 应开启仓库刷新开关"
 
-  USE_PREBUILT_IMAGES=0
   PREBUILT_BACKEND_IMAGE=""
   PREBUILT_FRONTEND_IMAGE=""
   PREBUILT_IMAGE_TAG=""
   parse_args \
-    --use-prebuilt-images \
     --backend-image yourname/v-save-backend \
     --frontend-image yourname/v-save-frontend \
     --image-tag 2026-04-01-test1
-  assert_eq "$USE_PREBUILT_IMAGES" "1" "--use-prebuilt-images 应开启预构建镜像部署模式"
   assert_eq "$PREBUILT_BACKEND_IMAGE" "yourname/v-save-backend" "--backend-image 应写入后端镜像名"
   assert_eq "$PREBUILT_FRONTEND_IMAGE" "yourname/v-save-frontend" "--frontend-image 应写入前端镜像名"
   assert_eq "$PREBUILT_IMAGE_TAG" "2026-04-01-test1" "--image-tag 应写入镜像 tag"
@@ -148,10 +145,18 @@ main() {
   SUPER_ADMIN_BOOTSTRAP_PASSWORD=""
   SUPER_ADMIN_BOOTSTRAP_NICKNAME=""
   SUPER_ADMIN_PASSWORD_GENERATED=0
+  PREBUILT_BACKEND_IMAGE=""
+  PREBUILT_FRONTEND_IMAGE=""
+  PREBUILT_IMAGE_TAG=""
+  USE_PREBUILT_IMAGES=0
   load_or_generate_env
   assert_eq "$APT_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/debian" "中国大陆环境下的 Debian 镜像应默认使用 HTTP，避免基础镜像缺证书导致 APT 失败"
   assert_eq "$APT_SECURITY_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/debian-security" "中国大陆环境下的 Debian Security 镜像应默认使用 HTTP"
   assert_eq "$ALPINE_MIRROR" "http://mirrors.tuna.tsinghua.edu.cn/alpine" "中国大陆环境下的 Alpine 镜像应默认使用 HTTP"
+  assert_eq "$USE_PREBUILT_IMAGES" "1" "一键部署应默认启用预构建镜像部署模式"
+  assert_eq "$PREBUILT_BACKEND_IMAGE" "chopper1026/v-save-backend" "一键部署应默认使用官方后端镜像"
+  assert_eq "$PREBUILT_FRONTEND_IMAGE" "chopper1026/v-save-frontend" "一键部署应默认使用官方前端镜像"
+  assert_eq "$PREBUILT_IMAGE_TAG" "latest" "一键部署应默认拉取 latest 镜像"
   assert_eq "$SUPER_ADMIN_BOOTSTRAP_EMAIL" "admin@gmail.com" "应为一键部署提供默认超管邮箱"
   assert_eq "$SUPER_ADMIN_BOOTSTRAP_NICKNAME" "系统管理员" "应为一键部署提供默认超管昵称"
   assert_contains "$SUPER_ADMIN_EMAILS" "admin@gmail.com" "超级管理员邮箱列表应至少包含 bootstrap 邮箱"
@@ -395,25 +400,8 @@ EOF
   compose_cmd() {
     printf '%s\n' "$*" >> "$deploy_calls"
   }
-  should_build_service_images() {
-    return 1
-  }
-  USE_PREBUILT_IMAGES=0
   deploy_stack
   assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d mysql" "部署时应先启动 MySQL"
-  assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d backend frontend" "复用现有镜像时不应附带 --build"
-
-  : > "$deploy_calls"
-  should_build_service_images() {
-    return 0
-  }
-  USE_PREBUILT_IMAGES=0
-  deploy_stack
-  assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d --build backend frontend" "需要构建镜像时应显式附带 --build"
-
-  : > "$deploy_calls"
-  USE_PREBUILT_IMAGES=1
-  deploy_stack
   assert_contains "$(cat "$deploy_calls")" "--profile with-mysql pull backend frontend" "预构建镜像模式应先拉取后端与前端镜像"
   assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d backend frontend" "预构建镜像模式应直接启动现成镜像"
   assert_not_contains "$(cat "$deploy_calls")" "--build backend frontend" "预构建镜像模式不应触发本地构建"
