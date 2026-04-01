@@ -1242,7 +1242,7 @@ deploy_stack() {
 
   log_info "开始拉取后端与前端最新镜像（tag: ${PREBUILT_IMAGE_TAG}）..."
   compose_cmd --profile with-mysql pull backend frontend
-  compose_cmd --profile with-mysql up -d backend frontend
+  compose_cmd --profile with-mysql up -d --force-recreate backend frontend
 
   if ! wait_for_container_ready "v-save-backend" 300; then
     die "后端容器启动超时，请执行 $(compose_cli_prefix) logs backend 查看原因。"

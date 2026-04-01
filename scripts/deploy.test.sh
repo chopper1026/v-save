@@ -495,7 +495,7 @@ EOF
   deploy_stack
   assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d mysql" "部署时应先启动 MySQL"
   assert_contains "$(cat "$deploy_calls")" "--profile with-mysql pull backend frontend" "预构建镜像模式应先拉取后端与前端镜像"
-  assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d backend frontend" "预构建镜像模式应直接启动现成镜像"
+  assert_contains "$(cat "$deploy_calls")" "--profile with-mysql up -d --force-recreate backend frontend" "预构建镜像模式应强制重建后端与前端容器，确保 latest 更新真正生效"
   assert_not_contains "$(cat "$deploy_calls")" "--build backend frontend" "预构建镜像模式不应触发本地构建"
   rm -f "$deploy_calls"
   rm -rf "$REPO_DIR"
