@@ -41,3 +41,8 @@ backend/tmp/
 /qa-*.md
 /qa-*.txt
 /qa-*.png
+
+# Local docs and agent instructions
+/docs/
+/CLAUDE.md
+/claude.md
