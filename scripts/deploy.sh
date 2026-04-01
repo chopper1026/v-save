@@ -943,8 +943,8 @@ load_or_generate_env() {
   [[ -n "$PREBUILT_FRONTEND_IMAGE" ]] || PREBUILT_FRONTEND_IMAGE="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_FRONTEND_IMAGE")"
   [[ -n "$PREBUILT_IMAGE_TAG" ]] || PREBUILT_IMAGE_TAG="$(read_preferred_env_value "$state_file" "$env_file" "V_SAVE_IMAGE_TAG")"
 
-  [[ -n "$FRONTEND_PORT" ]] || FRONTEND_PORT="$(choose_available_port 80 4871 8080 18080)"
-  [[ -n "$BACKEND_PORT" ]] || BACKEND_PORT="$(choose_available_port 3001 13001 23001)"
+  [[ -n "$FRONTEND_PORT" ]] || FRONTEND_PORT="$(choose_available_port 7752 4871 8080 18080)"
+  [[ -n "$BACKEND_PORT" ]] || BACKEND_PORT="$(choose_available_port 7753 3001 13001 23001)"
   [[ -n "$MYSQL_PORT" ]] || MYSQL_PORT="$(choose_available_port 3306 13306 23306)"
   [[ -n "$MYSQL_ROOT_PASSWORD" ]] || MYSQL_ROOT_PASSWORD="$(generate_secret)"
   [[ -n "$MYSQL_PASSWORD" ]] || MYSQL_PASSWORD="$(generate_secret)"
