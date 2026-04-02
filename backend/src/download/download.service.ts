@@ -893,6 +893,13 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
       input.runtimeTraceId,
     );
 
+    const nativeSilentDownloadUrl = this.normalizeNativeSilentDirectDownloadUrl({
+      platform: parsedVideoInfo.platform,
+      downloadUrl: result.downloadUrl,
+      allowWatermarkFallback: resolvedPolicy.allowWatermarkFallback,
+      runtimeTraceId: input.runtimeTraceId,
+    });
+
     await this.recordDownload(
       input.userId,
       {
@@ -901,18 +908,18 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
       },
       result.format,
       result.quality,
-      result.downloadUrl,
+      nativeSilentDownloadUrl,
     );
 
     return {
       mode: 'direct',
-      downloadUrl: result.downloadUrl,
+      downloadUrl: nativeSilentDownloadUrl,
       fileExtension: result.fileExtension,
       fileName: parsedVideoInfo.title || 'vsave-video',
       quality: result.quality,
       platform: parsedVideoInfo.platform,
       iosCompatible: resolvedPolicy.iosCompatible,
-      authPolicy: resolveNativeSilentDownloadAuthPolicy(result.downloadUrl),
+      authPolicy: resolveNativeSilentDownloadAuthPolicy(nativeSilentDownloadUrl),
       runtimeTraceId: normalizeRuntimeTraceId(input.runtimeTraceId),
     };
   }
@@ -2512,6 +2519,33 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
     params.set('runtimeStage', 'download');
     params.set('runtimeClientType', 'unknown');
     return `/api/proxy/fetch?${params.toString()}`;
+  }
+
+  private normalizeNativeSilentDirectDownloadUrl(input: {
+    platform: string;
+    downloadUrl: string;
+    allowWatermarkFallback: boolean;
+    runtimeTraceId?: string | null;
+  }): string {
+    const downloadUrl = String(input.downloadUrl || '').trim();
+    if (!downloadUrl) {
+      return downloadUrl;
+    }
+
+    if (downloadUrl.startsWith('/api/')) {
+      return downloadUrl;
+    }
+
+    if (String(input.platform || '').trim().toLowerCase() !== 'douyin') {
+      return downloadUrl;
+    }
+
+    return this.buildProxyFetchUrl(
+      downloadUrl,
+      'video',
+      input.allowWatermarkFallback,
+      input.runtimeTraceId,
+    );
   }
 
   private async probeDouyinStreamResolution(

@@ -1671,6 +1671,71 @@ describe('DownloadService prepareNativeSilentDownload', () => {
     );
   });
 
+  it('proxies douyin direct stream urls for native silent downloads', async () => {
+    jest.spyOn(service, 'parseVideo').mockResolvedValue({
+      title: 'Douyin Test',
+      platform: 'douyin',
+      sourceUrl: 'https://www.douyin.com/video/test',
+      videoUrl: 'https://v26-web.douyinvod.com/obj/tos-cn-ve-15/abc.mp4',
+      downloadOptions: {
+        video: {
+          '1080p': 'https://v26-web.douyinvod.com/obj/tos-cn-ve-15/abc.mp4',
+        },
+      },
+    } as any);
+    jest.spyOn(service, 'checkDownloadPermission').mockResolvedValue({
+      allowed: true,
+    } as any);
+    jest.spyOn(service, 'getDownloadUrl').mockResolvedValue({
+      downloadUrl: 'https://v26-web.douyinvod.com/obj/tos-cn-ve-15/abc.mp4',
+      format: VideoFormat.MP4,
+      quality: '1080p',
+      fileExtension: 'mp4',
+    } as any);
+    jest.spyOn(service, 'recordDownload').mockResolvedValue({ id: 'history-2' } as any);
+    downloadModeService.resolveGetUrlPolicy.mockResolvedValue({
+      iosCompatible: false,
+      allowWatermarkFallback: false,
+      probeMode: DouyinProbeMode.STRICT,
+    });
+
+    const result = await service.prepareNativeSilentDownload({
+      userId: 'user-1',
+      sourceUrl: 'https://www.douyin.com/video/test',
+      clientType: 'MOBILE' as any,
+      runtimeTraceId: 'trace-douyin',
+    });
+
+    expect(result).toEqual({
+      mode: 'direct',
+      downloadUrl: expect.stringContaining('/api/proxy/fetch?'),
+      fileExtension: 'mp4',
+      fileName: 'Douyin Test',
+      quality: '1080p',
+      platform: 'douyin',
+      iosCompatible: false,
+      authPolicy: 'none',
+      runtimeTraceId: 'trace-douyin',
+    });
+    expect(result.mode).toBe('direct');
+    if (result.mode !== 'direct') {
+      throw new Error('expected direct native silent download payload');
+    }
+    expect(result.downloadUrl).toContain(
+      encodeURIComponent('https://v26-web.douyinvod.com/obj/tos-cn-ve-15/abc.mp4'),
+    );
+    expect(result.downloadUrl).toContain('allowWatermarkFallback=0');
+    expect(service.recordDownload).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        sourceUrl: 'https://www.douyin.com/video/test',
+      }),
+      VideoFormat.MP4,
+      '1080p',
+      expect.stringContaining('/api/proxy/fetch?'),
+    );
+  });
+
   it('forces ios-compatible mode when explicitly requested for native silent prepare', async () => {
     jest.spyOn(service, 'parseVideo').mockResolvedValue({
       title: 'Bili Forced iOS',

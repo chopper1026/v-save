@@ -31,6 +31,17 @@ test('pauses the queue when backend auth has expired', () => {
   });
 });
 
+test('does not pause the queue for upstream background download 403 failures', () => {
+  const result = resolveSilentDownloadQueuePause({
+    response: {
+      status: 403,
+    },
+    message: '后台下载失败（HTTP 403）',
+  });
+
+  assert.equal(result, null);
+});
+
 test('does not pause the queue for generic transient failures', () => {
   const result = resolveSilentDownloadQueuePause(
     new Error('静默下载失败，请稍后重试'),

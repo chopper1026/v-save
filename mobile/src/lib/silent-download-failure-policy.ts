@@ -14,6 +14,10 @@ const extractErrorMessage = (error: any): string => {
   return '';
 };
 
+const isBackgroundDownloadHttpFailure = (message: string): boolean => {
+  return message.includes('后台下载失败');
+};
+
 export const resolveSilentDownloadQueuePause = (
   error: any,
 ): SilentDownloadQueuePauseDecision | null => {
@@ -28,6 +32,9 @@ export const resolveSilentDownloadQueuePause = (
   }
 
   if (status === 401 || status === 403) {
+    if (isBackgroundDownloadHttpFailure(message)) {
+      return null;
+    }
     return {
       reason: 'auth_required',
       message: '登录态已失效，静默下载队列已暂停，请重新登录后手动恢复队列。',

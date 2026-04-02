@@ -287,6 +287,44 @@ describe('DownloadController parseVideo', () => {
     });
   });
 
+  it('normalizes proxy fetch urls for native silent direct payloads', async () => {
+    downloadService.prepareNativeSilentDownload.mockResolvedValue({
+      mode: 'direct',
+      downloadUrl: '/api/proxy/fetch?url=https%3A%2F%2Fv26-web.douyinvod.com%2Fobj%2Fvideo.mp4&type=video&allowWatermarkFallback=0',
+      fileExtension: 'mp4',
+      fileName: '抖音视频',
+      quality: '1080p',
+      platform: 'douyin',
+      authPolicy: 'none',
+      runtimeTraceId: 'rt-douyin',
+    });
+
+    const req = {
+      user: { id: 'user-1' },
+      protocol: 'https',
+      get: () => 'api.example.com',
+      headers: {},
+    } as any;
+
+    const result = await controller.prepareNativeSilentDownload(
+      {
+        sourceUrl: 'https://www.douyin.com/video/test',
+        clientType: 'MOBILE',
+      } as any,
+      req,
+    );
+
+    expect(result).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        mode: 'direct',
+        downloadUrl:
+          'https://api.example.com/api/proxy/fetch?url=https%3A%2F%2Fv26-web.douyinvod.com%2Fobj%2Fvideo.mp4&type=video&allowWatermarkFallback=0',
+        authPolicy: 'none',
+      }),
+    });
+  });
+
   it('prepares a native silent download task payload for high-quality youtube background engine', async () => {
     downloadService.prepareNativeSilentDownload.mockResolvedValue({
       mode: 'serverTask',
