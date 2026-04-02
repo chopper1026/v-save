@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Platform,
   Pressable,
   StyleSheet,
@@ -16,6 +18,7 @@ import { Screen } from '@/components/screen';
 import { colors } from '@/constants/theme';
 import { buildParsedVideoView } from '@/lib/download-flow';
 import { api } from '@/lib/api';
+import { resolveHomeParseCtaState } from '@/lib/home-parse-cta';
 import { showInAppTopToast } from '@/lib/in-app-toast';
 import { buildShareAutoParseKey, extractSupportedVideoUrl } from '@/lib/link';
 import {
@@ -28,6 +31,11 @@ import {
 } from '@/lib/runtime-telemetry';
 import { useIntentStore } from '@/store/intent-store';
 import { useParseStore } from '@/store/parse-store';
+import {
+  getSilentDownloadTaskSummary,
+  useSilentDownloadQueueStore,
+} from '@/store/silent-download-queue-store';
+import { useSilentDownloadSettingsStore } from '@/store/silent-download-settings-store';
 import type { ParsedVideo } from '@/types/api';
 
 const AUTO_PARSING_HINT_MIN_MS = 900;
@@ -94,6 +102,12 @@ export default function HomeScreen() {
   const [error, setError] = useState('');
   const parseLockRef = useRef(false);
   const handledShareIntentKeyRef = useRef<string | null>(null);
+  const silentQueuePulseAnim = useRef(new Animated.Value(0)).current;
+  const silentDownloadEnabled = useSilentDownloadSettingsStore((state) => state.enabled);
+  const silentDownloadSettingsHydrated = useSilentDownloadSettingsStore((state) => state.hydrated);
+  const silentDownloadQueueHydrated = useSilentDownloadQueueStore((state) => state.hydrated);
+  const enqueueSourceUrl = useSilentDownloadQueueStore((state) => state.enqueueSourceUrl);
+  const silentQueueTasks = useSilentDownloadQueueStore((state) => state.tasks);
 
   const incomingUrl = useIntentStore((state) => state.incomingUrl);
   const shareAutoParsePending = useIntentStore((state) => state.shareAutoParsePending);
@@ -232,15 +246,62 @@ export default function HomeScreen() {
     [parseFromInput, setShareAutoParsePending, tryAcquireAutoParse]
   );
 
+  const triggerSilentQueue = useCallback(
+    (raw: string, source: string) => {
+      const target = extractSupportedVideoUrl(raw || '');
+      setShareAutoParsePending(false);
+      if (!target) {
+        return;
+      }
+
+      const { accepted } = enqueueSourceUrl(target);
+      if (accepted) {
+        silentQueuePulseAnim.stopAnimation();
+        silentQueuePulseAnim.setValue(0);
+        Animated.timing(silentQueuePulseAnim, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start(() => {
+          silentQueuePulseAnim.setValue(0);
+        });
+      } else {
+        showInAppTopToast({
+          title: '加入静默队列失败',
+          message: '该链接已在静默下载队列中等待处理',
+          level: 'warn',
+        });
+      }
+    },
+    [enqueueSourceUrl, setShareAutoParsePending, silentQueuePulseAnim]
+  );
+
   useEffect(() => {
+    if (!silentDownloadSettingsHydrated || !silentDownloadQueueHydrated) return;
     if (!incomingUrl) return;
     const consumed = consumeIncomingUrl();
     if (consumed) {
-      triggerAutoParse(consumed, '系统分享');
+      if (silentDownloadEnabled) {
+        triggerSilentQueue(consumed, '系统分享');
+      } else {
+        triggerAutoParse(consumed, '系统分享');
+      }
     }
-  }, [consumeIncomingUrl, incomingUrl, triggerAutoParse]);
+  }, [
+    consumeIncomingUrl,
+    incomingUrl,
+    silentDownloadEnabled,
+    silentDownloadQueueHydrated,
+    silentDownloadSettingsHydrated,
+    triggerAutoParse,
+    triggerSilentQueue,
+  ]);
 
   useEffect(() => {
+    if (!silentDownloadSettingsHydrated || !silentDownloadQueueHydrated) {
+      return;
+    }
     if (!hasShareIntent) {
       handledShareIntentKeyRef.current = null;
       return;
@@ -261,7 +322,11 @@ export default function HomeScreen() {
     handledShareIntentKeyRef.current = shareCycleKey;
 
     if (candidate) {
-      triggerAutoParse(candidate, '分享扩展');
+      if (silentDownloadEnabled) {
+        triggerSilentQueue(candidate, '分享扩展');
+      } else {
+        triggerAutoParse(candidate, '分享扩展');
+      }
     }
 
     resetShareIntent();
@@ -270,8 +335,35 @@ export default function HomeScreen() {
     resetShareIntent,
     shareIntent.text,
     shareIntent.webUrl,
+    silentDownloadEnabled,
+    silentDownloadQueueHydrated,
+    silentDownloadSettingsHydrated,
     triggerAutoParse,
+    triggerSilentQueue,
   ]);
+
+  const { parseBusy, loadingText } = resolveHomeParseCtaState({
+    parseLoading,
+    autoParsing,
+    shareAutoParsePending,
+    incomingUrlPresent: Boolean(incomingUrl),
+    hasShareIntent,
+    silentDownloadEnabled,
+  });
+
+  const pulseOpacity = silentQueuePulseAnim.interpolate({
+    inputRange: [0, 0.15, 0.75, 1],
+    outputRange: [0, 1, 1, 0],
+  });
+  const pulseTranslateY = silentQueuePulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [8, -18],
+  });
+  const pulseScale = silentQueuePulseAnim.interpolate({
+    inputRange: [0, 0.2, 1],
+    outputRange: [0.7, 1, 1.05],
+  });
+  const silentQueueSummary = getSilentDownloadTaskSummary(silentQueueTasks);
 
   const doParse = useCallback(async () => {
     if (parseLockRef.current || parseLoading || shareAutoParsePending) {
@@ -304,22 +396,71 @@ export default function HomeScreen() {
     setError('');
   }, [parseLoading, shareAutoParsePending]);
 
-  const parseBusy =
-    parseLoading ||
-    autoParsing ||
-    shareAutoParsePending ||
-    !!incomingUrl ||
-    hasShareIntent;
-
   return (
     <Screen>
       <View style={styles.hero}>
-        <View style={styles.heroBadge}>
-          <Ionicons name="sparkles" size={12} color={colors.primaryDark} />
-          <Text style={styles.heroBadgeText}>iOS 优先体验版</Text>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroBadge}>
+            <Ionicons name="sparkles" size={12} color={colors.primaryDark} />
+            <Text style={styles.heroBadgeText}>iOS 优先体验版</Text>
+          </View>
+          <Pressable
+            style={[
+              styles.silentQueueBtn,
+              silentDownloadEnabled && styles.silentQueueBtnActive,
+            ]}
+            onPress={() => router.push('/silent-queue')}
+          >
+            <View style={styles.silentQueueBtnInner}>
+            <Ionicons
+              name={silentDownloadEnabled ? 'moon' : 'moon-outline'}
+              size={13}
+              color={silentDownloadEnabled ? '#fff' : colors.textPrimary}
+            />
+            <Text
+              style={[
+                styles.silentQueueBtnText,
+                silentDownloadEnabled && styles.silentQueueBtnTextActive,
+              ]}
+            >
+              静默下载
+            </Text>
+              {silentQueueSummary.inFlight > 0 ? (
+                <View style={[styles.silentQueueCountPill, silentDownloadEnabled && styles.silentQueueCountPillActive]}>
+                  <Text
+                    style={[
+                      styles.silentQueueCountText,
+                      silentDownloadEnabled && styles.silentQueueCountTextActive,
+                    ]}
+                  >
+                    {silentQueueSummary.inFlight}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.silentQueuePulse,
+                {
+                  opacity: pulseOpacity,
+                  transform: [
+                    { translateY: pulseTranslateY },
+                    { scale: pulseScale },
+                  ],
+                },
+              ]}
+            >
+              <Text style={styles.silentQueuePulseText}>+1</Text>
+            </Animated.View>
+          </Pressable>
         </View>
         <Text style={styles.heroTitle}>V-SAVE</Text>
-        <Text style={styles.heroSubtitle}>分享链接一键解析，高清下载更顺滑</Text>
+        <Text style={styles.heroSubtitle}>
+          {silentDownloadEnabled
+            ? '分享跳转后仍进入首页，但会自动加入静默队列并下载最高画质'
+            : '分享链接一键解析，高清下载更顺滑'}
+        </Text>
 
         <View style={styles.chipsWrap}>
           {PLATFORM_CHIPS.map((item) => (
@@ -363,9 +504,7 @@ export default function HomeScreen() {
             {parseBusy ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color="#fff" size="small" />
-                <Text style={styles.primaryText}>
-                  {autoParsing || shareAutoParsePending ? '自动解析中...' : '解析中...'}
-                </Text>
+                <Text style={styles.primaryText}>{loadingText}</Text>
               </View>
             ) : (
               <>
@@ -421,10 +560,76 @@ const styles = StyleSheet.create({
     borderColor: '#CCDCFF',
     alignItems: 'center',
   },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+  },
   heroBadgeText: {
     color: colors.primaryDark,
     fontWeight: '700',
     fontSize: 12,
+  },
+  silentQueueBtn: {
+    position: 'relative',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#B5C9F5',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  silentQueueBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  silentQueueBtnActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  silentQueueBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  silentQueueBtnTextActive: {
+    color: '#fff',
+  },
+  silentQueueCountPill: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 999,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D9E6FF',
+  },
+  silentQueueCountPillActive: {
+    backgroundColor: 'rgba(255,255,255,0.20)',
+  },
+  silentQueueCountText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: colors.primaryDark,
+  },
+  silentQueueCountTextActive: {
+    color: '#fff',
+  },
+  silentQueuePulse: {
+    position: 'absolute',
+    right: -6,
+    top: -8,
+    borderRadius: 999,
+    backgroundColor: colors.success,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  silentQueuePulseText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#fff',
   },
   heroTitle: {
     fontSize: 34,

@@ -2,12 +2,15 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { Platform } from 'react-native';
 import * as Sharing from 'expo-sharing';
+import {
+  IOS_PHOTOS_INCOMPATIBLE_ERROR_CODE,
+  isIosPhotosIncompatibleError as isIosPhotosIncompatibleMediaError,
+} from './media-error-codes';
 
 const VIDEO_EXTS = new Set(['mp4', 'mov', 'm4v', 'webm']);
 const AUDIO_EXTS = new Set(['m4a', 'aac', 'mp3', 'wav', 'ogg', 'opus', 'flac']);
 const KNOWN_EXTS = new Set([...VIDEO_EXTS, ...AUDIO_EXTS]);
 const IOS_PHOTOS_VIDEO_EXTS = new Set(['mp4', 'mov', 'm4v']);
-export const IOS_PHOTOS_INCOMPATIBLE_ERROR_CODE = 'IOS_PHOTOS_INCOMPATIBLE_CODEC';
 
 const sanitizeFileName = (value: string): string => {
   const trimmed = String(value || 'vsave').trim();
@@ -67,7 +70,7 @@ const createCodedError = (message: string, code: string): Error & { code: string
 };
 
 export const isIosPhotosIncompatibleError = (error: any): boolean => {
-  return error?.code === IOS_PHOTOS_INCOMPATIBLE_ERROR_CODE;
+  return isIosPhotosIncompatibleMediaError(error);
 };
 
 const ensureUriHasExtension = async (
@@ -102,6 +105,7 @@ export interface DownloadToDeviceInput {
   authToken?: string;
   extraHeaders?: Record<string, string>;
   onProgress?: (progress: number) => void;
+  onStageChange?: (stage: 'downloading' | 'saving') => void;
 }
 
 export interface DownloadToDeviceResult {
@@ -120,6 +124,7 @@ export async function downloadToDevice(
     authToken,
     extraHeaders,
     onProgress,
+    onStageChange,
   } = input;
 
   const directory = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}downloads/`;
@@ -171,6 +176,8 @@ export async function downloadToDevice(
     }
   );
 
+  onStageChange?.('downloading');
+
   const result = await resumable.downloadAsync();
   if (!result?.uri) {
     throw new Error('下载失败：未获取到本地文件');
@@ -212,6 +219,7 @@ export async function downloadToDevice(
     }
 
     try {
+      onStageChange?.('saving');
       const mediaLibraryUri = normalizeUriForMediaLibrary(persistedUri);
       const asset = await MediaLibrary.createAssetAsync(mediaLibraryUri);
       await MediaLibrary.createAlbumAsync('V-SAVE', asset, false).catch(() => undefined);

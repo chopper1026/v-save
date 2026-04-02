@@ -156,6 +156,56 @@ describe('BilibiliParser quality mapping', () => {
     });
   });
 
+  it('resolves b23 short links from redirect location header without depending on final page fetch', async () => {
+    jest.spyOn(axios, 'get').mockResolvedValue({
+      headers: {
+        location:
+          'https://www.bilibili.com/video/BV1EWX6BCEwR?share_source=COPY',
+      },
+      request: {
+        res: {
+          responseUrl: 'https://b23.tv/m76FL2I',
+        },
+      },
+    } as any);
+
+    const resolvedUrl = await (parser as any).resolveShortUrl('https://b23.tv/m76FL2I');
+
+    expect(resolvedUrl).toBe(
+      'https://www.bilibili.com/video/BV1EWX6BCEwR?share_source=COPY',
+    );
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://b23.tv/m76FL2I',
+      expect.objectContaining({
+        maxRedirects: 0,
+      }),
+    );
+  });
+
+  it('falls back to redirect location from error response when bilibili final page rejects the request', async () => {
+    jest.spyOn(axios, 'get').mockRejectedValue({
+      message: 'Request failed with status code 412',
+      response: {
+        status: 412,
+        headers: {
+          location:
+            'https://www.bilibili.com/video/BV1EWX6BCEwR?-Arouter=story&share_source=COPY',
+        },
+      },
+      request: {
+        res: {
+          responseUrl: 'https://www.bilibili.com/video/BV1EWX6BCEwR?-Arouter=story',
+        },
+      },
+    });
+
+    const resolvedUrl = await (parser as any).resolveShortUrl('https://b23.tv/m76FL2I');
+
+    expect(resolvedUrl).toBe(
+      'https://www.bilibili.com/video/BV1EWX6BCEwR?-Arouter=story&share_source=COPY',
+    );
+  });
+
   it('expands dash quality map with bounded concurrency without losing candidate streams', async () => {
     const parserAny = parser as any;
     const deferredByQn = new Map<number, (value: any) => void>();

@@ -1,15 +1,16 @@
 import { toProxyUrl } from '@/lib/api';
 import type { ParsedVideo, ParsedVideoView } from '@/types/api';
 import type { RuntimeTraceStage } from '@/lib/runtime-telemetry';
+import { ASYNC_YOUTUBE_QUALITIES } from './download-flow-constants';
 import { planPreviewCandidates } from './preview-candidates';
+
+export { ASYNC_YOUTUBE_QUALITIES } from './download-flow-constants';
 
 export type FormatType = 'video' | 'audio' | 'merge';
 
 const DEFAULT_VIDEO_QUALITY_OPTIONS = ['4k', '1080p', '720p'];
 const DEFAULT_AUDIO_QUALITY_OPTIONS = ['320k', '192k', '132k', '64k'];
 const SOURCE_SINGLE_QUALITY_OPTION = 'source';
-
-export const ASYNC_YOUTUBE_QUALITIES = new Set(['720p', '1080p', '4k']);
 
 const unique = (items: string[]): string[] => {
   const map = new Map<string, string>();
