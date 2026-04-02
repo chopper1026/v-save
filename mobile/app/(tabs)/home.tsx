@@ -18,9 +18,14 @@ import { Screen } from '@/components/screen';
 import { colors } from '@/constants/theme';
 import { buildParsedVideoView } from '@/lib/download-flow';
 import { api } from '@/lib/api';
+import { resolveHomeHeroSubtitle } from '@/lib/home-hero-presentation';
 import { resolveHomeParseCtaState } from '@/lib/home-parse-cta';
 import { showInAppTopToast } from '@/lib/in-app-toast';
 import { buildShareAutoParseKey, extractSupportedVideoUrl } from '@/lib/link';
+import {
+  resolveSilentQueueButtonPresentation,
+  resolveSilentQueueToggleFeedback,
+} from '@/lib/silent-queue-button-presentation';
 import {
   createRuntimeTraceId,
   createRuntimeEventKey,
@@ -103,8 +108,10 @@ export default function HomeScreen() {
   const parseLockRef = useRef(false);
   const handledShareIntentKeyRef = useRef<string | null>(null);
   const silentQueuePulseAnim = useRef(new Animated.Value(0)).current;
+  const silentQueueLongPressAtRef = useRef(0);
   const silentDownloadEnabled = useSilentDownloadSettingsStore((state) => state.enabled);
   const silentDownloadSettingsHydrated = useSilentDownloadSettingsStore((state) => state.hydrated);
+  const setSilentDownloadEnabled = useSilentDownloadSettingsStore((state) => state.setEnabled);
   const silentDownloadQueueHydrated = useSilentDownloadQueueStore((state) => state.hydrated);
   const enqueueSourceUrl = useSilentDownloadQueueStore((state) => state.enqueueSourceUrl);
   const silentQueueTasks = useSilentDownloadQueueStore((state) => state.tasks);
@@ -364,6 +371,28 @@ export default function HomeScreen() {
     outputRange: [0.7, 1, 1.05],
   });
   const silentQueueSummary = getSilentDownloadTaskSummary(silentQueueTasks);
+  const silentQueueButton = resolveSilentQueueButtonPresentation({
+    enabled: silentDownloadEnabled,
+    count: silentQueueSummary.inFlight,
+  });
+  const heroSubtitle = resolveHomeHeroSubtitle(silentDownloadEnabled);
+
+  const openSilentQueue = useCallback(() => {
+    if (Date.now() - silentQueueLongPressAtRef.current < 800) {
+      return;
+    }
+    router.push('/silent-queue');
+  }, [router]);
+
+  const toggleSilentQueueMode = useCallback(() => {
+    if (!silentDownloadSettingsHydrated) {
+      return;
+    }
+    silentQueueLongPressAtRef.current = Date.now();
+    const nextEnabled = !silentDownloadEnabled;
+    setSilentDownloadEnabled(nextEnabled);
+    showInAppTopToast(resolveSilentQueueToggleFeedback(nextEnabled));
+  }, [setSilentDownloadEnabled, silentDownloadEnabled, silentDownloadSettingsHydrated]);
 
   const doParse = useCallback(async () => {
     if (parseLockRef.current || parseLoading || shareAutoParsePending) {
@@ -405,43 +434,73 @@ export default function HomeScreen() {
             <Text style={styles.heroBadgeText}>iOS 优先体验版</Text>
           </View>
           <Pressable
-            style={[
+            accessibilityRole="button"
+            accessibilityLabel={
+              silentDownloadEnabled ? '静默下载已开启' : '静默下载已关闭'
+            }
+            accessibilityHint="点按查看静默下载队列，长按可直接开启或关闭静默下载"
+            delayLongPress={260}
+            style={({ pressed }) => [
               styles.silentQueueBtn,
+              {
+                minHeight: silentQueueButton.minHeight,
+                minWidth: silentQueueButton.minWidth,
+              },
               silentDownloadEnabled && styles.silentQueueBtnActive,
+              pressed && styles.silentQueueBtnPressed,
             ]}
-            onPress={() => router.push('/silent-queue')}
+            onPress={openSilentQueue}
+            onLongPress={toggleSilentQueueMode}
           >
             <View style={styles.silentQueueBtnInner}>
-            <Ionicons
-              name={silentDownloadEnabled ? 'moon' : 'moon-outline'}
-              size={13}
-              color={silentDownloadEnabled ? '#fff' : colors.textPrimary}
-            />
-            <Text
-              style={[
-                styles.silentQueueBtnText,
-                silentDownloadEnabled && styles.silentQueueBtnTextActive,
-              ]}
-            >
-              静默下载
-            </Text>
-              {silentQueueSummary.inFlight > 0 ? (
-                <View style={[styles.silentQueueCountPill, silentDownloadEnabled && styles.silentQueueCountPillActive]}>
-                  <Text
-                    style={[
-                      styles.silentQueueCountText,
-                      silentDownloadEnabled && styles.silentQueueCountTextActive,
-                    ]}
-                  >
-                    {silentQueueSummary.inFlight}
-                  </Text>
-                </View>
-              ) : null}
+              <View
+                style={[
+                  styles.silentQueueIconBubble,
+                  silentDownloadEnabled && styles.silentQueueIconBubbleActive,
+                ]}
+              >
+                <Ionicons
+                  name={silentQueueButton.iconName}
+                  size={13}
+                  color={silentDownloadEnabled ? '#fff' : colors.primaryDark}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.silentQueueBtnText,
+                  silentDownloadEnabled && styles.silentQueueBtnTextActive,
+                ]}
+              >
+                静默下载
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color={silentDownloadEnabled ? 'rgba(255,255,255,0.86)' : colors.textMuted}
+              />
             </View>
+            {silentQueueButton.countVisible ? (
+              <View
+                style={[
+                  styles.silentQueueCountBadge,
+                  silentDownloadEnabled && styles.silentQueueCountBadgeActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.silentQueueCountText,
+                    silentDownloadEnabled && styles.silentQueueCountTextActive,
+                  ]}
+                >
+                  {silentQueueButton.countLabel}
+                </Text>
+              </View>
+            ) : null}
             <Animated.View
               pointerEvents="none"
               style={[
                 styles.silentQueuePulse,
+                silentQueueButton.countVisible && styles.silentQueuePulseWithBadge,
                 {
                   opacity: pulseOpacity,
                   transform: [
@@ -456,11 +515,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
         <Text style={styles.heroTitle}>V-SAVE</Text>
-        <Text style={styles.heroSubtitle}>
-          {silentDownloadEnabled
-            ? '分享跳转后仍进入首页，但会自动加入静默队列并下载最高画质'
-            : '分享链接一键解析，高清下载更顺滑'}
-        </Text>
+        <Text style={styles.heroSubtitle}>{heroSubtitle}</Text>
 
         <View style={styles.chipsWrap}>
           {PLATFORM_CHIPS.map((item) => (
@@ -573,49 +628,81 @@ const styles = StyleSheet.create({
   },
   silentQueueBtn: {
     position: 'relative',
+    justifyContent: 'center',
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#B5C9F5',
     backgroundColor: 'rgba(255,255,255,0.72)',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   silentQueueBtnInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   silentQueueBtnActive: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    borderColor: '#1D4ED8',
+    shadowOpacity: 0.16,
+  },
+  silentQueueBtnPressed: {
+    transform: [{ scale: 0.985 }],
+  },
+  silentQueueIconBubble: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(37,99,235,0.10)',
+  },
+  silentQueueIconBubbleActive: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   silentQueueBtnText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '800',
     color: colors.textPrimary,
   },
   silentQueueBtnTextActive: {
     color: '#fff',
   },
-  silentQueueCountPill: {
-    minWidth: 18,
-    height: 18,
+  silentQueueCountBadge: {
+    position: 'absolute',
+    right: -6,
+    top: -6,
+    minWidth: 20,
+    height: 20,
     borderRadius: 999,
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#D9E6FF',
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: '#DCEAFF',
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  silentQueueCountPillActive: {
-    backgroundColor: 'rgba(255,255,255,0.20)',
+  silentQueueCountBadgeActive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#2D63E7',
   },
   silentQueueCountText: {
     fontSize: 10,
     fontWeight: '900',
-    color: colors.primaryDark,
+    color: '#fff',
   },
   silentQueueCountTextActive: {
-    color: '#fff',
+    color: colors.primaryDark,
   },
   silentQueuePulse: {
     position: 'absolute',
@@ -625,6 +712,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success,
     paddingHorizontal: 6,
     paddingVertical: 2,
+  },
+  silentQueuePulseWithBadge: {
+    right: 16,
+    top: -10,
   },
   silentQueuePulseText: {
     fontSize: 10,
