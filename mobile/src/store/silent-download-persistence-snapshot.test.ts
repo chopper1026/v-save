@@ -25,6 +25,14 @@ test('converts interrupted active tasks into recoverable queued snapshots', () =
   const tasks = [
     createTask({
       id: 'active-1',
+      status: 'preparing',
+      progress: 12,
+      updatedAt: 220,
+      runtimeTraceId: 'trace-prepare',
+      title: 'prepare-demo',
+    }),
+    createTask({
+      id: 'active-2',
       status: 'downloading',
       progress: 64,
       updatedAt: 300,
@@ -39,6 +47,14 @@ test('converts interrupted active tasks into recoverable queued snapshots', () =
   assert.deepEqual(snapshot, [
     createTask({
       id: 'active-1',
+      status: 'queued',
+      progress: 0,
+      updatedAt: 100,
+      runtimeTraceId: undefined,
+      title: 'prepare-demo',
+    }),
+    createTask({
+      id: 'active-2',
       status: 'queued',
       progress: 0,
       updatedAt: 100,

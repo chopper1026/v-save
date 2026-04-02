@@ -19,6 +19,7 @@ import {
   ParseVideoDto,
   GetDownloadUrlDto,
   CreateDownloadTaskDto,
+  PrepareNativeSilentDownloadDto,
   QueryDownloadHistoryDto,
   DeleteDownloadHistoriesDto,
   VideoFormat,
@@ -29,6 +30,7 @@ import { isParserFailureError } from '../parsers/parser-failure.error';
 import { AuthHealthService } from '../auth-health/auth-health.service';
 import { VideoInfo } from '../parsers/base.interface';
 import { DownloadModeService } from '../download-mode/download-mode.service';
+import { DownloadClientType } from '../download-mode/download-mode.types';
 import { RuntimeMonitorService } from '../runtime-monitor/runtime-monitor.service';
 import type { RuntimePlatform } from '../runtime-monitor/runtime-monitor.types';
 import {
@@ -472,6 +474,70 @@ export class DownloadController {
     }
   }
 
+  @Post('prepare-native-silent')
+  @UseGuards(JwtAuthGuard)
+  async prepareNativeSilentDownload(
+    @Body() prepareDto: PrepareNativeSilentDownloadDto,
+    @Request() req: RequestWithUser,
+  ): Promise<{ success: boolean; data: any }> {
+    const startedAt = Date.now();
+    const traceId = this.resolveRuntimeTraceId(req);
+    const userId = req.user?.id;
+    const clientType = prepareDto.clientType || DownloadClientType.MOBILE;
+    let interfaceOutcome: 'success' | 'failure' = 'failure';
+    let interfaceErrorCode: string | null = null;
+    let interfacePlatform: RuntimePlatform = detectRuntimePlatformFromUrl(
+      prepareDto.sourceUrl,
+    );
+
+    try {
+      if (!prepareDto.sourceUrl) {
+        interfaceErrorCode = 'SOURCE_URL_MISSING';
+        throw new BadRequestException('请提供视频来源链接');
+      }
+
+      if (!userId) {
+        interfaceErrorCode = 'USER_NOT_LOGGED_IN';
+        throw new BadRequestException('用户未登录');
+      }
+
+      const result = await this.downloadService.prepareNativeSilentDownload({
+        userId,
+        sourceUrl: prepareDto.sourceUrl,
+        clientType,
+        runtimeTraceId: traceId,
+      });
+
+      interfacePlatform = normalizeRuntimePlatform(result.platform || interfacePlatform);
+      interfaceOutcome = 'success';
+
+      if (result.mode === 'direct') {
+        result.downloadUrl = this.normalizeApiDownloadUrl(result.downloadUrl, req) || '';
+      }
+
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      interfaceErrorCode =
+        interfaceErrorCode ||
+        normalizeRuntimeErrorCode(error, 'PREPARE_NATIVE_SILENT_FAILED');
+      throw error;
+    } finally {
+      await this.runtimeMonitorService.recordInterfaceEvent({
+        traceId,
+        platform: interfacePlatform,
+        clientType,
+        stage: 'download',
+        interfaceName: 'download.prepare_native_silent',
+        outcome: interfaceOutcome,
+        latencyMs: Date.now() - startedAt,
+        errorCode: interfaceErrorCode,
+      });
+    }
+  }
+
   /**
    * 查询异步下载任务状态
    * 需要JWT认证
@@ -535,6 +601,8 @@ export class DownloadController {
   @UseGuards(JwtAuthGuard)
   async downloadTaskFile(
     @Param('id') id: string,
+    @Query('wait') wait: string,
+    @Query('timeoutMs') timeoutMs: string,
     @Request() req: RequestWithUser,
     @Res() res: Response,
   ) {
@@ -559,7 +627,15 @@ export class DownloadController {
     }
 
     try {
-      await this.downloadService.streamTaskFile(userId, id, res);
+      const waitUntilReady = wait === '1' || wait === 'true';
+      const parsedTimeoutMs = Number.parseInt(timeoutMs, 10);
+      await this.downloadService.streamTaskFile(userId, id, res, {
+        waitUntilReady,
+        timeoutMs:
+          Number.isFinite(parsedTimeoutMs) && parsedTimeoutMs > 0
+            ? parsedTimeoutMs
+            : undefined,
+      });
       interfaceOutcome = 'success';
     } catch (error: any) {
       interfaceErrorCode = normalizeRuntimeErrorCode(error, 'DOWNLOAD_TASK_FILE_FAILED');

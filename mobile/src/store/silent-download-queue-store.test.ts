@@ -89,18 +89,25 @@ test('recovers interrupted parsing and downloading tasks back into the queue on 
     status: 'parsing',
     progress: 4,
   };
+  const preparing = {
+    ...createSilentDownloadTask('https://www.youtube.com/watch?v=preparing'),
+    status: 'preparing',
+    progress: 2,
+  };
   const downloading = {
     ...createSilentDownloadTask('https://www.bilibili.com/video/BV1xx411c7mD'),
     status: 'downloading',
     progress: 61,
   };
 
-  const recovered = recoverInterruptedSilentDownloadTasks([parsing, downloading]);
+  const recovered = recoverInterruptedSilentDownloadTasks([parsing, preparing, downloading]);
 
   assert.equal(recovered[0].status, 'queued');
   assert.equal(recovered[0].progress, 0);
   assert.equal(recovered[1].status, 'queued');
   assert.equal(recovered[1].progress, 0);
+  assert.equal(recovered[2].status, 'queued');
+  assert.equal(recovered[2].progress, 0);
 });
 
 test('requeues a failed task once when the queue is otherwise empty', () => {
@@ -163,6 +170,10 @@ test('shows the latest finished tasks in history view ordered by finished time',
 test('computes summary counts using all finished tasks while keeping a separate in-flight count', () => {
   const tasks = [
     {
+      ...createSilentDownloadTask('https://www.youtube.com/watch?v=preparing'),
+      status: 'preparing',
+    },
+    {
       ...createSilentDownloadTask('https://www.douyin.com/video/active'),
       status: 'downloading',
     },
@@ -178,8 +189,8 @@ test('computes summary counts using all finished tasks while keeping a separate 
 
   const summary = getSilentDownloadTaskSummary(tasks);
 
-  assert.equal(summary.total, 14);
-  assert.equal(summary.inFlight, 2);
+  assert.equal(summary.total, 15);
+  assert.equal(summary.inFlight, 3);
   assert.equal(summary.finished, 12);
 });
 

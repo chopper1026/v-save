@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -41,6 +42,8 @@ import { RequestContextService } from '../observability/request-context.service'
 import { RuntimeMonitorService } from '../runtime-monitor/runtime-monitor.service';
 import { resolveYtDlpPath } from '../config/executable-paths';
 import { DouyinOptimizationService } from '../douyin-optimization/douyin-optimization.service';
+import { DownloadModeService } from '../download-mode/download-mode.service';
+import { DownloadClientType } from '../download-mode/download-mode.types';
 import type {
   RuntimeClientType,
   RuntimeTraceStage,
@@ -57,6 +60,12 @@ import {
   type DownloadTaskMetricStatus,
   type ObservedPlatform,
 } from '../observability/observability.utils';
+import {
+  resolveNativeSilentDownloadAuthPolicy,
+  resolveNativeSilentDownloadQuality,
+  shouldUseNativeSilentDownloadAsyncTask,
+  shouldUseNativeSilentDownloadIosCompatibleFirstAttempt,
+} from './native-silent-download-policy';
 
 const execFileAsync = promisify(execFile);
 
@@ -150,6 +159,35 @@ interface CheckDownloadPermissionInput {
   entryType?: 'get-url' | 'create-task';
 }
 
+interface PrepareNativeSilentDownloadInput {
+  userId: string;
+  sourceUrl: string;
+  clientType?: DownloadClientType;
+  runtimeTraceId?: string | null;
+}
+
+export type NativeSilentDownloadPreparation =
+  | {
+      mode: 'direct';
+      downloadUrl: string;
+      fileExtension: string;
+      fileName: string;
+      quality: string;
+      platform: VideoInfo['platform'];
+      authPolicy: 'none' | 'bearer';
+      runtimeTraceId: string | null;
+    }
+  | {
+      mode: 'serverTask';
+      taskId: string;
+      pollIntervalMs: number;
+      fileName: string;
+      quality: string;
+      platform: VideoInfo['platform'];
+      authPolicy: 'none' | 'bearer';
+      runtimeTraceId: string | null;
+    };
+
 /**
  * 下载服务
  */
@@ -242,6 +280,8 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly runtimeMonitorService?: RuntimeMonitorService,
     @Optional()
     private readonly douyinOptimizationService?: DouyinOptimizationService,
+    @Optional()
+    private readonly downloadModeService?: DownloadModeService,
   ) {
     mkdirSync(this.tasksDir, { recursive: true });
   }
@@ -732,6 +772,142 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
     return this.parsersService.getDouyinQualityStatus(refreshKey);
   }
 
+  private resolveSilentDownloadPermissionQuality(quality?: string): VideoQuality {
+    switch (quality) {
+      case VideoQuality.SD:
+        return VideoQuality.SD;
+      case VideoQuality.FHD:
+        return VideoQuality.FHD;
+      case '1440p':
+      case VideoQuality.QHD:
+        return VideoQuality.QHD;
+      case VideoQuality.UHD:
+        return VideoQuality.UHD;
+      case VideoQuality.HD:
+      default:
+        return VideoQuality.HD;
+    }
+  }
+
+  async prepareNativeSilentDownload(
+    input: PrepareNativeSilentDownloadInput,
+  ): Promise<NativeSilentDownloadPreparation> {
+    const normalizedSourceUrl =
+      this.extractFirstHttpUrl(input.sourceUrl) || String(input.sourceUrl || '').trim();
+    if (!normalizedSourceUrl) {
+      throw new BadRequestException('请提供视频来源链接');
+    }
+
+    const parsedVideoInfo = await this.parseVideo(normalizedSourceUrl, input.userId);
+    if (!parsedVideoInfo) {
+      throw new BadRequestException('未检测到可解析的视频链接');
+    }
+
+    const quality = resolveNativeSilentDownloadQuality(parsedVideoInfo as ExtendedVideoInfo);
+    const permission = await this.checkDownloadPermission({
+      userId: input.userId,
+      platform: parsedVideoInfo.platform,
+      quality: this.resolveSilentDownloadPermissionQuality(quality),
+      entryType: 'get-url',
+    });
+
+    if (!permission.allowed) {
+      throw new ForbiddenException({
+        code: permission.code,
+        message: permission.message || '当前账号暂无下载权限',
+      });
+    }
+
+    const iosCompatibleFirstAttempt =
+      shouldUseNativeSilentDownloadIosCompatibleFirstAttempt({
+        parsedVideo: parsedVideoInfo as ExtendedVideoInfo,
+        targetQuality: quality,
+      });
+
+    if (
+      shouldUseNativeSilentDownloadAsyncTask({
+        platform: parsedVideoInfo.platform,
+        quality,
+        iosCompatible: iosCompatibleFirstAttempt,
+      })
+    ) {
+      const task = await this.createDownloadTask(
+        input.userId,
+        normalizedSourceUrl,
+        {
+          ...parsedVideoInfo,
+          sourceUrl: normalizedSourceUrl,
+        },
+        VideoFormat.MP4,
+        quality,
+        input.runtimeTraceId,
+      );
+
+      return {
+        mode: 'serverTask',
+        taskId: task.id,
+        pollIntervalMs: 1200,
+        fileName: parsedVideoInfo.title || 'vsave-video',
+        quality,
+        platform: parsedVideoInfo.platform,
+        authPolicy: 'bearer',
+        runtimeTraceId: normalizeRuntimeTraceId(input.runtimeTraceId),
+      };
+    }
+
+    const resolvedPolicy = this.downloadModeService
+      ? await this.downloadModeService.resolveGetUrlPolicy({
+          clientType: input.clientType || DownloadClientType.MOBILE,
+          videoInfo: parsedVideoInfo,
+          format: VideoFormat.MP4,
+          quality,
+          overrides: {
+            iosCompatible: iosCompatibleFirstAttempt,
+            allowWatermarkFallback: false,
+          },
+        })
+      : {
+          iosCompatible: iosCompatibleFirstAttempt,
+          allowWatermarkFallback: false,
+          probeMode: DouyinProbeMode.STRICT,
+        };
+
+    const result = await this.getDownloadUrl(
+      {
+        ...parsedVideoInfo,
+        sourceUrl: normalizedSourceUrl,
+      },
+      VideoFormat.MP4,
+      quality,
+      resolvedPolicy.iosCompatible,
+      resolvedPolicy.allowWatermarkFallback,
+      resolvedPolicy.probeMode,
+      input.runtimeTraceId,
+    );
+
+    await this.recordDownload(
+      input.userId,
+      {
+        ...parsedVideoInfo,
+        sourceUrl: normalizedSourceUrl,
+      },
+      result.format,
+      result.quality,
+      result.downloadUrl,
+    );
+
+    return {
+      mode: 'direct',
+      downloadUrl: result.downloadUrl,
+      fileExtension: result.fileExtension,
+      fileName: parsedVideoInfo.title || 'vsave-video',
+      quality: result.quality,
+      platform: parsedVideoInfo.platform,
+      authPolicy: resolveNativeSilentDownloadAuthPolicy(result.downloadUrl),
+      runtimeTraceId: normalizeRuntimeTraceId(input.runtimeTraceId),
+    };
+  }
+
   async createDownloadTask(
     userId: string,
     sourceUrl: string,
@@ -846,13 +1022,24 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     taskId: string,
     res: Response,
+    options?: {
+      waitUntilReady?: boolean;
+      timeoutMs?: number;
+    },
   ): Promise<void> {
-    const task = await this.downloadTaskRepository.findOne({
+    let task = await this.downloadTaskRepository.findOne({
       where: { id: taskId, userId },
     });
 
     if (!task) {
       throw new Error('任务不存在');
+    }
+
+    if (
+      options?.waitUntilReady &&
+      (task.status !== 'completed' || !task.outputPath)
+    ) {
+      task = await this.waitForTaskFile(userId, taskId, options.timeoutMs);
     }
 
     if (task.status === 'expired') {
@@ -884,6 +1071,40 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
       stream.on('end', resolve);
       stream.pipe(res);
     });
+  }
+
+  private async waitForTaskFile(
+    userId: string,
+    taskId: string,
+    timeoutMs = 15 * 60 * 1000,
+  ): Promise<DownloadTask> {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < Math.max(1_000, timeoutMs)) {
+      const task = await this.downloadTaskRepository.findOne({
+        where: { id: taskId, userId },
+      });
+
+      if (!task) {
+        throw new Error('任务不存在');
+      }
+
+      if (task.status === 'completed' && task.outputPath) {
+        return task;
+      }
+
+      if (task.status === 'failed') {
+        throw new Error(task.message || '下载任务失败');
+      }
+
+      if (task.status === 'expired') {
+        throw new Error(task.message || '任务文件已过期，请重新创建下载任务');
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    throw new Error('任务尚未完成，暂不可下载');
   }
 
   private enqueueTask(taskId: string): void {

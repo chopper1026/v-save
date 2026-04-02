@@ -6,6 +6,7 @@ describe('DownloadController parseVideo', () => {
   let controller: DownloadController;
   const downloadService = {
     parseVideo: jest.fn(),
+    prepareNativeSilentDownload: jest.fn(),
     getDouyinQualityStatus: jest.fn(),
     checkDownloadPermission: jest.fn(),
     createDownloadTask: jest.fn(),
@@ -236,6 +237,92 @@ describe('DownloadController parseVideo', () => {
         success: true,
       }),
     );
+  });
+
+  it('prepares a native silent download direct payload for iOS background engine', async () => {
+    downloadService.prepareNativeSilentDownload.mockResolvedValue({
+      mode: 'direct',
+      downloadUrl: 'https://api.example.com/api/download/merge?video=test',
+      fileExtension: 'mp4',
+      fileName: '测试视频',
+      quality: '1080p',
+      platform: 'bilibili',
+      authPolicy: 'bearer',
+      runtimeTraceId: 'rt-download',
+    });
+
+    const req = {
+      user: { id: 'user-1' },
+      protocol: 'https',
+      get: () => 'api.example.com',
+      headers: {
+        'x-runtime-trace-id': 'rt-download',
+      },
+    } as any;
+
+    const result = await controller.prepareNativeSilentDownload(
+      {
+        sourceUrl: 'https://www.bilibili.com/video/BV1xx411c7mD',
+        clientType: 'MOBILE',
+      } as any,
+      req,
+    );
+
+    expect(downloadService.prepareNativeSilentDownload).toHaveBeenCalledWith({
+      userId: 'user-1',
+      sourceUrl: 'https://www.bilibili.com/video/BV1xx411c7mD',
+      clientType: 'MOBILE',
+      runtimeTraceId: 'rt-download',
+    });
+    expect(result).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        mode: 'direct',
+        authPolicy: 'bearer',
+      }),
+    });
+  });
+
+  it('prepares a native silent download task payload for high-quality youtube background engine', async () => {
+    downloadService.prepareNativeSilentDownload.mockResolvedValue({
+      mode: 'serverTask',
+      taskId: 'task-1',
+      pollIntervalMs: 1200,
+      fileName: 'YouTube 视频',
+      quality: '4k',
+      platform: 'youtube',
+      authPolicy: 'bearer',
+      runtimeTraceId: 'rt-youtube',
+    });
+
+    const req = {
+      user: { id: 'user-1' },
+      protocol: 'https',
+      get: () => 'api.example.com',
+    } as any;
+
+    const result = await controller.prepareNativeSilentDownload(
+      {
+        sourceUrl: 'https://www.youtube.com/watch?v=test',
+        clientType: 'MOBILE',
+      } as any,
+      req,
+    );
+
+    expect(downloadService.prepareNativeSilentDownload).toHaveBeenCalledWith({
+      userId: 'user-1',
+      sourceUrl: 'https://www.youtube.com/watch?v=test',
+      clientType: 'MOBILE',
+      runtimeTraceId: null,
+    });
+    expect(result).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        mode: 'serverTask',
+        taskId: 'task-1',
+        authPolicy: 'bearer',
+      }),
+    });
   });
 
   it('uses forwarded host headers when normalizing api download urls', async () => {

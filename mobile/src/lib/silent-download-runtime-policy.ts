@@ -17,7 +17,7 @@ export type SilentDownloadCoordinatorAction<T extends SilentDownloadRuntimeTaskL
       task: T;
     };
 
-const INTERRUPTED_STATUSES = new Set(['parsing', 'downloading', 'saving']);
+const INTERRUPTED_STATUSES = new Set(['preparing', 'parsing', 'downloading', 'saving']);
 
 const getInterruptedSilentDownloadTaskIds = (
   tasks: SilentDownloadRuntimeTaskLike[],

@@ -1,6 +1,17 @@
 import { useEffect, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import * as MediaLibrary from 'expo-media-library';
+import * as Notifications from 'expo-notifications';
+import { API_BASE_URL } from '@/lib/env';
+import {
+  bootstrapNativeSilentDownloadBridge,
+  configureNativeSilentDownloadBridge,
+  isNativeSilentDownloadEngineAvailable,
+  subscribeNativeSilentDownloadSnapshots,
+} from '@/lib/native-silent-download-bridge';
+import { shouldRequestNativeSilentDownloadRuntimePermissions } from '@/lib/native-silent-download-permission-policy';
 import { shouldPersistSilentDownloadQueueSnapshot } from '@/lib/silent-download-runtime-policy';
+import { useAuthStore } from '@/store/auth-store';
 import { useSilentDownloadQueueStore } from '@/store/silent-download-queue-store';
 import { useSilentDownloadSettingsStore } from '@/store/silent-download-settings-store';
 import {
@@ -31,7 +42,37 @@ const writeJson = async (key: string, value: unknown) => {
   }
 };
 
+const ensureNativeSilentDownloadPhotoPermission = async () => {
+  const current = await MediaLibrary.getPermissionsAsync();
+  const granted =
+    current.granted || (current as any).accessPrivileges === 'limited';
+  if (granted) {
+    return current;
+  }
+
+  return MediaLibrary.requestPermissionsAsync();
+};
+
+const ensureNativeSilentDownloadNotificationPermission = async () => {
+  const current = await Notifications.getPermissionsAsync();
+  const granted =
+    current.granted ||
+    current.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+  if (granted) {
+    return current;
+  }
+
+  return Notifications.requestPermissionsAsync({
+    ios: {
+      allowAlert: true,
+      allowBadge: false,
+      allowSound: false,
+    },
+  });
+};
+
 export function SilentDownloadPersistenceBridge() {
+  const token = useAuthStore((state) => state.token);
   const settingsHydrated = useSilentDownloadSettingsStore((state) => state.hydrated);
   const queueHydrated = useSilentDownloadQueueStore((state) => state.hydrated);
   const enabled = useSilentDownloadSettingsStore((state) => state.enabled);
@@ -44,6 +85,8 @@ export function SilentDownloadPersistenceBridge() {
   const setQueueHydrated = useSilentDownloadQueueStore((state) => state.setHydrated);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastQueueSnapshotRef = useRef<string | null>(null);
+  const previousEnabledRef = useRef<boolean | null>(null);
+  const useNativeEngine = isNativeSilentDownloadEngineAvailable();
 
   useEffect(() => {
     let active = true;
@@ -63,10 +106,27 @@ export function SilentDownloadPersistenceBridge() {
       }
 
       const persistedQueueState = normalizePersistedSilentDownloadQueueState(queue);
+      const persistedEnabled = settings?.enabled === true;
 
-      hydrateSettings(settings?.enabled === true);
-      hydrateQueueState(persistedQueueState);
-      lastQueueSnapshotRef.current = JSON.stringify(persistedQueueState);
+      hydrateSettings(persistedEnabled);
+      if (useNativeEngine) {
+        const snapshot = await bootstrapNativeSilentDownloadBridge({
+          apiBaseUrl: API_BASE_URL,
+          authToken: token,
+          enabled: persistedEnabled,
+          legacyState: persistedQueueState,
+        });
+
+        if (!active) {
+          return;
+        }
+
+        hydrateQueueState(snapshot || persistedQueueState);
+        lastQueueSnapshotRef.current = null;
+      } else {
+        hydrateQueueState(persistedQueueState);
+        lastQueueSnapshotRef.current = JSON.stringify(persistedQueueState);
+      }
       setSettingsHydrated(true);
       setQueueHydrated(true);
     };
@@ -79,16 +139,68 @@ export function SilentDownloadPersistenceBridge() {
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, [hydrateQueueState, hydrateSettings, setQueueHydrated, setSettingsHydrated]);
+  }, [
+    hydrateQueueState,
+    hydrateSettings,
+    setQueueHydrated,
+    setSettingsHydrated,
+    token,
+    useNativeEngine,
+  ]);
 
   useEffect(() => {
     if (!settingsHydrated) {
       return;
     }
     void writeJson(SETTINGS_STORAGE_KEY, { enabled });
-  }, [enabled, settingsHydrated]);
+    if (!useNativeEngine) {
+      previousEnabledRef.current = enabled;
+      return;
+    }
+
+    void (async () => {
+      const shouldRequestPermissions =
+        shouldRequestNativeSilentDownloadRuntimePermissions({
+          useNativeEngine,
+          previousEnabled: previousEnabledRef.current,
+          nextEnabled: enabled,
+        });
+      previousEnabledRef.current = enabled;
+
+      if (shouldRequestPermissions) {
+        await Promise.allSettled([
+          ensureNativeSilentDownloadPhotoPermission(),
+          ensureNativeSilentDownloadNotificationPermission(),
+        ]);
+      }
+      const snapshot = await configureNativeSilentDownloadBridge({
+        apiBaseUrl: API_BASE_URL,
+        authToken: token,
+        enabled,
+      });
+      if (snapshot) {
+        hydrateQueueState(snapshot);
+      }
+    })();
+  }, [enabled, hydrateQueueState, settingsHydrated, token, useNativeEngine]);
 
   useEffect(() => {
+    if (!useNativeEngine || !queueHydrated) {
+      return;
+    }
+
+    const unsubscribe = subscribeNativeSilentDownloadSnapshots((snapshot) => {
+      hydrateQueueState(snapshot);
+    });
+
+    return unsubscribe;
+  }, [hydrateQueueState, queueHydrated, useNativeEngine]);
+
+  useEffect(() => {
+    if (useNativeEngine) {
+      return;
+    }
+
     const persistedQueueState = buildPersistedSilentDownloadQueueState({
       tasks,
       pausedReason,
@@ -118,7 +230,7 @@ export function SilentDownloadPersistenceBridge() {
         saveTimerRef.current = null;
       }
     };
-  }, [pauseMessage, pausedReason, queueHydrated, tasks]);
+  }, [pauseMessage, pausedReason, queueHydrated, tasks, useNativeEngine]);
 
   return null;
 }

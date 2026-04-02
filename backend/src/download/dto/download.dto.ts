@@ -98,6 +98,15 @@ export class CreateDownloadTaskDto {
   quality?: string;
 }
 
+export class PrepareNativeSilentDownloadDto {
+  @IsString()
+  sourceUrl: string;
+
+  @IsOptional()
+  @IsEnum(DownloadClientType)
+  clientType?: DownloadClientType;
+}
+
 /**
  * 下载历史查询DTO
  */
