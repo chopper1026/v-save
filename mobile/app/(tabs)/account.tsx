@@ -16,6 +16,10 @@ import { Screen } from '@/components/screen';
 import { AccountTabSkeleton } from '@/components/tab-first-render-skeletons';
 import { colors } from '@/constants/theme';
 import { api, mapApiUserToMobileUser } from '@/lib/api';
+import {
+  resolveAccountCoverPresentation,
+  resolveAccountPagePresentation,
+} from '@/lib/account-page-presentation';
 import { useAuthStore } from '@/store/auth-store';
 import type { UserProfile } from '@/types/api';
 
@@ -45,7 +49,61 @@ const getErrorMessage = (err: any, fallback: string) => {
   return fallback;
 };
 
+function DetailRow({
+  label,
+  value,
+  caption,
+  onPress,
+  isLast = false,
+}: {
+  label: string;
+  value: string;
+  caption?: string;
+  onPress?: () => void;
+  isLast?: boolean;
+}) {
+  const content = (
+    <>
+      <View style={styles.detailRowMeta}>
+        <Text style={styles.detailRowLabel}>{label}</Text>
+        {caption ? (
+          <Text style={styles.detailRowCaption} numberOfLines={1}>
+            {caption}
+          </Text>
+        ) : null}
+      </View>
+      <View style={styles.detailRowValueWrap}>
+        <Text style={styles.detailRowValue} numberOfLines={1}>
+          {value}
+        </Text>
+        {onPress ? (
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        ) : null}
+      </View>
+    </>
+  );
+
+  if (!onPress) {
+    return <View style={[styles.detailRow, isLast && styles.detailRowLast]}>{content}</View>;
+  }
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.detailRow,
+        isLast && styles.detailRowLast,
+        pressed && styles.rowPressed,
+      ]}
+      onPress={onPress}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
 export default function AccountScreen() {
+  const coverPresentation = resolveAccountCoverPresentation();
+  const pagePresentation = resolveAccountPagePresentation();
   const user = useAuthStore((state) => state.user);
   const updateUser = useAuthStore((state) => state.updateUser);
   const logout = useAuthStore((state) => state.logout);
@@ -225,6 +283,45 @@ export default function AccountScreen() {
     (profile?.role || user?.role || 'USER') === 'SUPER_ADMIN'
       ? '超级管理员'
       : '普通用户';
+  const displayName = nickname || profile?.nickname || user?.name || '未设置昵称';
+  const displayEmail = profile?.email || user?.email || '--';
+  const avatarInitial = displayName.slice(0, 1).toUpperCase() || 'U';
+  const maskedPhone = phone ? maskPhone(phone) : '未绑定';
+  const downloadCount = String(profile?.downloadCount ?? user?.downloadCount ?? 0);
+  const profileStatusLabel = profileDirty ? '待保存' : '已同步';
+  const detailRows = pagePresentation.detailFields.map((field) => {
+    if (field === 'phone') {
+      return {
+        key: field,
+        label: '手机号',
+        value: maskedPhone,
+        caption: phone ? '已绑定，可随时修改' : '未绑定，点击添加',
+        onPress: () => openEditor('phone'),
+      };
+    }
+
+    if (field === 'email') {
+      return {
+        key: field,
+        label: '邮箱',
+        value: displayEmail,
+      };
+    }
+
+    if (field === 'status') {
+      return {
+        key: field,
+        label: '账号状态',
+        value: statusLabel,
+      };
+    }
+
+    return {
+      key: field,
+      label: '累计下载',
+      value: `${downloadCount} 次`,
+    };
+  });
 
   if (loading) {
     return <AccountTabSkeleton />;
@@ -233,15 +330,25 @@ export default function AccountScreen() {
   return (
     <Screen>
       <View style={styles.heroCard}>
+        <View style={styles.heroOrbLarge} />
+        <View style={styles.heroOrbSmall} />
+
         <View style={styles.heroRow}>
-          <Pressable onPress={pickAvatar} style={styles.avatarWrap}>
+          <Pressable
+            onPress={pickAvatar}
+            style={({ pressed }) => [styles.avatarWrap, pressed && styles.avatarWrapPressed]}
+            accessibilityRole="button"
+            accessibilityHint={
+              coverPresentation.avatarInteraction === 'press-avatar'
+                ? '点按更换头像'
+                : undefined
+            }
+          >
             {avatar ? (
               <Image source={{ uri: avatar }} style={styles.avatar} />
             ) : (
               <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarText}>
-                  {(profile?.nickname || user?.name || 'U').slice(0, 1).toUpperCase()}
-                </Text>
+                <Text style={styles.avatarText}>{avatarInitial}</Text>
               </View>
             )}
             <View style={styles.avatarAction}>
@@ -250,94 +357,148 @@ export default function AccountScreen() {
           </Pressable>
 
           <View style={styles.heroMeta}>
-            <Text style={styles.name}>{profile?.nickname || user?.name || '未设置昵称'}</Text>
-            <Text style={styles.email}>{profile?.email || user?.email || '--'}</Text>
-            <View style={styles.levelBadge}>
-              <Ionicons name="shield-checkmark-outline" size={13} color={colors.primaryDark} />
-              <Text style={styles.levelText}>{roleLabel}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.name} numberOfLines={1}>
+                {displayName}
+              </Text>
+              {coverPresentation.nicknameInteraction === 'inline-edit-icon' ? (
+                <Pressable
+                  onPress={() => openEditor('nickname')}
+                  style={({ pressed }) => [
+                    styles.nicknameEditBtn,
+                    pressed && styles.nicknameEditBtnPressed,
+                  ]}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityHint="点按编辑昵称"
+                >
+                  <Ionicons name="pencil" size={13} color="#fff" />
+                </Pressable>
+              ) : null}
+            </View>
+            <Text style={styles.email} numberOfLines={1}>
+              {displayEmail}
+            </Text>
+
+            <View style={styles.heroBadges}>
+              <View style={styles.heroBadge}>
+                <Ionicons name="shield-checkmark-outline" size={13} color="#fff" />
+                <Text style={styles.heroBadgeText}>{roleLabel}</Text>
+              </View>
+              {coverPresentation.showStatusBadge ? (
+                <View style={styles.heroBadge}>
+                  <Ionicons name="pulse-outline" size={13} color="#fff" />
+                  <Text style={styles.heroBadgeText}>{statusLabel}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>
       </View>
 
-      <View style={styles.formCard}>
-        <Text style={styles.sectionTitle}>个人资料</Text>
-
-        <Pressable style={styles.rowItem} onPress={() => openEditor('nickname')}>
-          <Text style={styles.rowLabel}>昵称</Text>
-          <View style={styles.rowValueWrap}>
-            <Text style={styles.rowValue} numberOfLines={1}>
-              {nickname || '--'}
-            </Text>
-            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+      <View
+        style={[
+          styles.contentShell,
+          pagePresentation.contentLayout === 'single-column' &&
+            styles.contentShellSingleColumn,
+        ]}
+      >
+        <View style={styles.primaryPanel}>
+          <View style={styles.panelHeaderRow}>
+            <Text style={styles.panelTitleCompact}>账户资料</Text>
+            <View
+              style={[
+                styles.panelStatusChip,
+                profileDirty
+                  ? styles.panelStatusChipPending
+                  : styles.panelStatusChipSynced,
+              ]}
+            >
+              <Ionicons
+                name={
+                  profileDirty
+                    ? 'time-outline'
+                    : 'checkmark-circle-outline'
+                }
+                size={13}
+                color={profileDirty ? colors.warning : colors.primaryDark}
+              />
+              <Text
+                style={[
+                  styles.panelStatusText,
+                  profileDirty
+                    ? styles.panelStatusTextPending
+                    : styles.panelStatusTextSynced,
+                ]}
+              >
+                {profileStatusLabel}
+              </Text>
+            </View>
           </View>
-        </Pressable>
 
-        <Pressable style={styles.rowItem} onPress={() => openEditor('phone')}>
-          <Text style={styles.rowLabel}>手机号</Text>
-          <View style={styles.rowValueWrap}>
-            <Text style={styles.rowValue} numberOfLines={1}>
-              {phone ? maskPhone(phone) : '未绑定，点击绑定'}
-            </Text>
-            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+          <View style={styles.detailList}>
+            {detailRows.map((row, index) => (
+              <DetailRow
+                key={row.key}
+                label={row.label}
+                value={row.value}
+                caption={row.caption}
+                onPress={row.onPress}
+                isLast={index === detailRows.length - 1}
+              />
+            ))}
           </View>
-        </Pressable>
 
-        <View style={styles.rowItem}>
-          <Text style={styles.rowLabel}>邮箱</Text>
-          <Text style={styles.rowValue} numberOfLines={1}>
-            {profile?.email || user?.email || '--'}
-          </Text>
+          {!!error ? (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          ) : null}
+
+          {profileDirty || savingProfile ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && profileDirty && styles.primaryBtnPressed,
+              ]}
+              onPress={() => {
+                void onSaveProfile();
+              }}
+              disabled={savingProfile}
+            >
+              {savingProfile ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="save-outline" size={15} color="#fff" />
+                  <Text style={styles.primaryText}>保存资料</Text>
+                </>
+              )}
+            </Pressable>
+          ) : (
+            <View style={styles.syncedHint}>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={16}
+                color={colors.primaryDark}
+              />
+              <Text style={styles.syncedHintText}>资料已同步</Text>
+            </View>
+          )}
         </View>
-
-        {!!error && <Text style={styles.error}>{error}</Text>}
 
         <Pressable
-          style={[styles.primaryBtn, !profileDirty && styles.primaryBtnDisabled]}
-          onPress={() => {
-            void onSaveProfile();
-          }}
-          disabled={savingProfile || !profileDirty}
+          style={({ pressed }) => [
+            styles.logoutBtn,
+            pressed && styles.logoutBtnPressed,
+          ]}
+          onPress={logout}
         >
-          {savingProfile ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Ionicons name="save-outline" size={15} color="#fff" />
-              <Text style={styles.primaryText}>
-                {profileDirty ? '保存个人资料' : '资料已是最新'}
-              </Text>
-            </>
-          )}
+          <Ionicons name="log-out-outline" size={16} color={colors.danger} />
+          <Text style={styles.logoutText}>退出登录</Text>
         </Pressable>
       </View>
-
-      <View style={styles.infoCard}>
-        <Text style={styles.sectionTitle}>账户概览</Text>
-        <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>角色</Text>
-          <Text style={styles.infoValue}>{roleLabel}</Text>
-        </View>
-        <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>账号状态</Text>
-          <Text style={styles.infoValue}>{statusLabel}</Text>
-        </View>
-        <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>手机号</Text>
-          <Text style={styles.infoValue}>{phone ? maskPhone(phone) : '未绑定'}</Text>
-        </View>
-        <View style={styles.infoLineWrap}>
-          <Text style={styles.infoLabel}>累计下载次数</Text>
-          <Text style={styles.infoValue}>
-            {profile?.downloadCount ?? user?.downloadCount ?? 0}
-          </Text>
-        </View>
-      </View>
-
-      <Pressable style={styles.logoutBtn} onPress={logout}>
-        <Ionicons name="log-out-outline" size={16} color={colors.danger} />
-        <Text style={styles.logoutText}>退出登录</Text>
-      </Pressable>
 
       <Modal
         visible={editorType !== 'none'}
@@ -395,20 +556,38 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  muted: {
-    color: colors.textMuted,
-  },
   heroCard: {
+    position: 'relative',
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#C5D8FF',
-    borderRadius: 20,
-    backgroundColor: '#E8F0FF',
-    padding: 14,
+    borderColor: '#7EB1FF',
+    borderRadius: 28,
+    backgroundColor: '#2563EB',
+    padding: 18,
+    gap: 16,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 7,
+  },
+  heroOrbLarge: {
+    position: 'absolute',
+    right: -26,
+    top: -34,
+    width: 148,
+    height: 148,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  heroOrbSmall: {
+    position: 'absolute',
+    left: -18,
+    bottom: -36,
+    width: 112,
+    height: 112,
+    borderRadius: 999,
+    backgroundColor: 'rgba(147,197,253,0.18)',
   },
   heroRow: {
     flexDirection: 'row',
@@ -416,169 +595,267 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarWrap: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: '#C8D8FA',
+    borderColor: 'rgba(255,255,255,0.48)',
+    shadowColor: 'rgba(15,23,42,0.28)',
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  avatarWrapPressed: {
+    transform: [{ scale: 0.985 }],
   },
   avatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
   },
   avatarAction: {
     position: 'absolute',
-    right: 2,
-    bottom: 2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    right: 4,
+    bottom: 4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(30,64,175,0.9)',
+    backgroundColor: 'rgba(15,23,42,0.66)',
     borderWidth: 1,
-    borderColor: '#fff',
+    borderColor: 'rgba(255,255,255,0.72)',
   },
   avatarPlaceholder: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 28,
-    color: colors.primary,
-    fontWeight: '800',
+    fontSize: 32,
+    color: '#fff',
+    fontWeight: '900',
   },
   heroMeta: {
     flex: 1,
-    gap: 4,
+    gap: 6,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   name: {
-    color: colors.textPrimary,
-    fontSize: 21,
+    flex: 1,
+    color: '#fff',
+    fontSize: 24,
     fontWeight: '900',
+    letterSpacing: 0.2,
+  },
+  nicknameEditBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.20)',
+  },
+  nicknameEditBtnPressed: {
+    transform: [{ scale: 0.96 }],
   },
   email: {
-    color: colors.textSecondary,
-    fontSize: 12,
+    color: 'rgba(239,246,255,0.84)',
+    fontSize: 12.5,
   },
-  levelBadge: {
-    marginTop: 3,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+  heroBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+  },
+  heroBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 999,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderWidth: 1,
-    borderColor: '#C8D8FA',
-    backgroundColor: '#EEF4FF',
+    borderColor: 'rgba(255,255,255,0.20)',
   },
-  levelText: {
-    fontSize: 11,
+  heroBadgeText: {
+    color: '#fff',
+    fontSize: 11.5,
     fontWeight: '800',
-    color: colors.primaryDark,
   },
-  formCard: {
+  contentShell: {
+    gap: 14,
+  },
+  contentShellSingleColumn: {
+    flexDirection: 'column',
+  },
+  primaryPanel: {
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
+    borderColor: '#D9E5FB',
     backgroundColor: colors.card,
-    padding: 12,
-    gap: 10,
+    padding: 16,
+    gap: 12,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
-  sectionTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  rowItem: {
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  panelHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 12,
   },
-  rowLabel: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
+  panelTitleCompact: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900',
   },
-  rowValueWrap: {
+  panelStatusChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    flex: 1,
-    justifyContent: 'flex-end',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
   },
-  rowValue: {
-    color: colors.textPrimary,
-    fontSize: 13,
+  panelStatusChipSynced: {
+    borderColor: '#D6E4FF',
+    backgroundColor: '#EEF4FF',
+  },
+  panelStatusChipPending: {
+    borderColor: '#FED7AA',
+    backgroundColor: '#FFF7ED',
+  },
+  panelStatusText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  panelStatusTextSynced: {
+    color: colors.primaryDark,
+  },
+  panelStatusTextPending: {
+    color: colors.warning,
+  },
+  detailList: {
+    borderWidth: 1,
+    borderColor: '#E3EBFB',
+    borderRadius: 18,
+    backgroundColor: '#FBFDFF',
+    overflow: 'hidden',
+  },
+  detailRow: {
+    minHeight: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E7EEFC',
+  },
+  detailRowLast: {
+    borderBottomWidth: 0,
+  },
+  rowPressed: {
+    backgroundColor: '#F6F9FF',
+  },
+  detailRowMeta: {
+    flex: 1,
+    gap: 4,
+  },
+  detailRowLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
     fontWeight: '700',
-    maxWidth: '72%',
+  },
+  detailRowCaption: {
+    color: colors.textMuted,
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+  detailRowValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    flexShrink: 1,
+  },
+  detailRowValue: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+    maxWidth: 160,
     textAlign: 'right',
   },
+  errorBanner: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
   error: {
+    flex: 1,
     color: colors.danger,
-    fontSize: 12,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   primaryBtn: {
-    height: 46,
-    borderRadius: 12,
+    height: 48,
+    borderRadius: 16,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
+    gap: 7,
+  },
+  primaryBtnPressed: {
+    transform: [{ scale: 0.988 }],
+  },
+  syncedHint: {
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D6E4FF',
+    backgroundColor: '#F7FAFF',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
   },
-  primaryBtnDisabled: {
-    backgroundColor: colors.textMuted,
+  syncedHintText: {
+    color: colors.primaryDark,
+    fontWeight: '800',
+    fontSize: 13.5,
   },
   primaryText: {
     color: '#fff',
     fontWeight: '800',
     fontSize: 14,
   },
-  infoCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    backgroundColor: colors.card,
-    padding: 14,
-    gap: 10,
-  },
-  infoLineWrap: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  infoLabel: {
-    color: colors.textSecondary,
-    fontSize: 13,
-  },
-  infoValue: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
   logoutBtn: {
-    height: 44,
-    borderRadius: 12,
+    height: 48,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#FECACA',
     backgroundColor: '#FEF2F2',
@@ -587,10 +864,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
+  logoutBtnPressed: {
+    transform: [{ scale: 0.988 }],
+  },
   logoutText: {
     color: colors.danger,
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 13.5,
   },
   modalMask: {
     flex: 1,
@@ -619,6 +899,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     color: colors.textPrimary,
     fontSize: 15,
+    backgroundColor: colors.cardMuted,
   },
   modalActions: {
     flexDirection: 'row',
@@ -631,9 +912,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
   },
   modalBtnGhostText: {
     color: colors.textSecondary,
@@ -646,7 +928,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
   },
   modalBtnPrimaryText: {
     color: '#fff',
