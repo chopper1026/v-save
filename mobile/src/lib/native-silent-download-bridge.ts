@@ -4,6 +4,7 @@ import {
   buildNativeSilentDownloadLegacyMigration,
   shouldUseNativeSilentDownloadEngine,
 } from '@/lib/native-silent-download-engine';
+import { buildNativeSilentDownloadBridgePayload } from '@/lib/native-silent-download-bridge-config';
 import {
   createSilentDownloadTask,
   useSilentDownloadQueueStore,
@@ -72,12 +73,12 @@ export const bootstrapNativeSilentDownloadBridge = async (
     return null;
   }
 
-  const snapshot = await nativeSilentDownloadModule.bootstrap({
+  const snapshot = await nativeSilentDownloadModule.bootstrap(buildNativeSilentDownloadBridgePayload({
     apiBaseUrl: String(input.apiBaseUrl || API_BASE_URL),
-    authToken: String(input.authToken || '').trim() || null,
     enabled: input.enabled === true,
+    authToken: input.authToken,
     legacyState: buildNativeSilentDownloadLegacyMigration(input.legacyState),
-  });
+  }) as unknown as NativeSilentDownloadBootstrapInput);
   return normalizeSnapshot(snapshot);
 };
 
@@ -88,11 +89,11 @@ export const configureNativeSilentDownloadBridge = async (
     return null;
   }
 
-  const snapshot = await nativeSilentDownloadModule.configure({
+  const snapshot = await nativeSilentDownloadModule.configure(buildNativeSilentDownloadBridgePayload({
     apiBaseUrl: String(input.apiBaseUrl || API_BASE_URL),
-    authToken: String(input.authToken || '').trim() || null,
     enabled: input.enabled === true,
-  });
+    authToken: input.authToken,
+  }) as unknown as NativeSilentDownloadConfigInput);
   return normalizeSnapshot(snapshot);
 };
 
