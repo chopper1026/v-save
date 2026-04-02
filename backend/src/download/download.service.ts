@@ -163,6 +163,7 @@ interface PrepareNativeSilentDownloadInput {
   userId: string;
   sourceUrl: string;
   clientType?: DownloadClientType;
+  iosCompatible?: boolean | null;
   runtimeTraceId?: string | null;
 }
 
@@ -174,6 +175,7 @@ export type NativeSilentDownloadPreparation =
       fileName: string;
       quality: string;
       platform: VideoInfo['platform'];
+      iosCompatible: boolean;
       authPolicy: 'none' | 'bearer';
       runtimeTraceId: string | null;
     }
@@ -184,6 +186,7 @@ export type NativeSilentDownloadPreparation =
       fileName: string;
       quality: string;
       platform: VideoInfo['platform'];
+      iosCompatible: boolean;
       authPolicy: 'none' | 'bearer';
       runtimeTraceId: string | null;
     };
@@ -818,11 +821,15 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    const iosCompatibleFirstAttempt =
+    const heuristicIosCompatible =
       shouldUseNativeSilentDownloadIosCompatibleFirstAttempt({
         parsedVideo: parsedVideoInfo as ExtendedVideoInfo,
         targetQuality: quality,
       });
+    const iosCompatibleFirstAttempt =
+      typeof input.iosCompatible === 'boolean'
+        ? input.iosCompatible
+        : heuristicIosCompatible;
 
     if (
       shouldUseNativeSilentDownloadAsyncTask({
@@ -850,6 +857,7 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
         fileName: parsedVideoInfo.title || 'vsave-video',
         quality,
         platform: parsedVideoInfo.platform,
+        iosCompatible: iosCompatibleFirstAttempt,
         authPolicy: 'bearer',
         runtimeTraceId: normalizeRuntimeTraceId(input.runtimeTraceId),
       };
@@ -903,6 +911,7 @@ export class DownloadService implements OnModuleInit, OnModuleDestroy {
       fileName: parsedVideoInfo.title || 'vsave-video',
       quality: result.quality,
       platform: parsedVideoInfo.platform,
+      iosCompatible: resolvedPolicy.iosCompatible,
       authPolicy: resolveNativeSilentDownloadAuthPolicy(result.downloadUrl),
       runtimeTraceId: normalizeRuntimeTraceId(input.runtimeTraceId),
     };

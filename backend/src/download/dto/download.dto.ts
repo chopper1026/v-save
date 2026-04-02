@@ -105,6 +105,10 @@ export class PrepareNativeSilentDownloadDto {
   @IsOptional()
   @IsEnum(DownloadClientType)
   clientType?: DownloadClientType;
+
+  @IsOptional()
+  @IsBoolean()
+  iosCompatible?: boolean | null;
 }
 
 /**

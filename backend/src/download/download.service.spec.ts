@@ -1592,6 +1592,7 @@ describe('DownloadService prepareNativeSilentDownload', () => {
       fileName: 'Bili Test',
       quality: '1080p',
       platform: 'bilibili',
+      iosCompatible: false,
       authPolicy: 'none',
       runtimeTraceId: 'trace-1',
     });
@@ -1654,6 +1655,7 @@ describe('DownloadService prepareNativeSilentDownload', () => {
       fileName: 'YouTube Test',
       quality: '1080p',
       platform: 'youtube',
+      iosCompatible: false,
       authPolicy: 'bearer',
       runtimeTraceId: 'trace-2',
     });
@@ -1666,6 +1668,261 @@ describe('DownloadService prepareNativeSilentDownload', () => {
       VideoFormat.MP4,
       '1080p',
       'trace-2',
+    );
+  });
+
+  it('forces ios-compatible mode when explicitly requested for native silent prepare', async () => {
+    jest.spyOn(service, 'parseVideo').mockResolvedValue({
+      title: 'Bili Forced iOS',
+      platform: 'bilibili',
+      sourceUrl: 'https://www.bilibili.com/video/BV1forced',
+      videoUrl: 'https://cdn.example.com/default.mp4',
+      downloadOptions: {
+        video: {
+          '1080p': 'https://cdn.example.com/video-1080.mp4',
+        },
+        videoCandidates: {
+          '1080p': [
+            {
+              url: 'https://cdn.example.com/video-1080.mp4',
+              codecid: 7,
+            },
+          ],
+        },
+      },
+    } as any);
+    jest.spyOn(service, 'checkDownloadPermission').mockResolvedValue({
+      allowed: true,
+    } as any);
+    jest.spyOn(service, 'getDownloadUrl').mockResolvedValue({
+      downloadUrl: 'https://cdn.example.com/video-1080-ios.mp4',
+      format: VideoFormat.MP4,
+      quality: '1080p',
+      fileExtension: 'mp4',
+    } as any);
+    jest.spyOn(service, 'recordDownload').mockResolvedValue({ id: 'history-2' } as any);
+    downloadModeService.resolveGetUrlPolicy.mockResolvedValue({
+      iosCompatible: true,
+      allowWatermarkFallback: false,
+      probeMode: DouyinProbeMode.STRICT,
+    });
+
+    const result = await service.prepareNativeSilentDownload({
+      userId: 'user-1',
+      sourceUrl: 'https://www.bilibili.com/video/BV1forced',
+      clientType: 'MOBILE' as any,
+      iosCompatible: true,
+      runtimeTraceId: 'trace-3',
+    });
+
+    expect(downloadModeService.resolveGetUrlPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        overrides: expect.objectContaining({
+          iosCompatible: true,
+        }),
+      }),
+    );
+    expect(service.getDownloadUrl).toHaveBeenCalledWith(
+      expect.anything(),
+      VideoFormat.MP4,
+      '1080p',
+      true,
+      false,
+      DouyinProbeMode.STRICT,
+      'trace-3',
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        mode: 'direct',
+        iosCompatible: true,
+      }),
+    );
+  });
+
+  it('keeps heuristic ios-compatible first attempt when override is null', async () => {
+    jest.spyOn(service, 'parseVideo').mockResolvedValue({
+      title: 'Bili Hevc',
+      platform: 'bilibili',
+      sourceUrl: 'https://www.bilibili.com/video/BV1hevc',
+      videoUrl: 'https://cdn.example.com/default.mp4',
+      downloadOptions: {
+        video: {
+          '1080p': 'https://cdn.example.com/video-hevc.mp4',
+        },
+        videoCandidates: {
+          '1080p': [
+            {
+              url: 'https://cdn.example.com/video-hevc.mp4',
+              codecid: 12,
+            },
+            {
+              url: 'https://cdn.example.com/video-avc.mp4',
+              codecid: 7,
+            },
+          ],
+        },
+      },
+    } as any);
+    jest.spyOn(service, 'checkDownloadPermission').mockResolvedValue({
+      allowed: true,
+    } as any);
+    jest.spyOn(service, 'getDownloadUrl').mockResolvedValue({
+      downloadUrl: 'https://cdn.example.com/video-hevc-ios.mp4',
+      format: VideoFormat.MP4,
+      quality: '1080p',
+      fileExtension: 'mp4',
+    } as any);
+    jest.spyOn(service, 'recordDownload').mockResolvedValue({ id: 'history-3' } as any);
+    downloadModeService.resolveGetUrlPolicy.mockResolvedValue({
+      iosCompatible: true,
+      allowWatermarkFallback: false,
+      probeMode: DouyinProbeMode.STRICT,
+    });
+
+    const result = await service.prepareNativeSilentDownload({
+      userId: 'user-1',
+      sourceUrl: 'https://www.bilibili.com/video/BV1hevc',
+      clientType: 'MOBILE' as any,
+      iosCompatible: null,
+      runtimeTraceId: 'trace-4',
+    });
+
+    expect(downloadModeService.resolveGetUrlPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        overrides: expect.objectContaining({
+          iosCompatible: true,
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        mode: 'direct',
+        iosCompatible: true,
+      }),
+    );
+  });
+
+  it('overrides the default ios-compatible heuristic when explicitly disabled', async () => {
+    jest.spyOn(service, 'parseVideo').mockResolvedValue({
+      title: 'Bili Forced Default',
+      platform: 'bilibili',
+      sourceUrl: 'https://www.bilibili.com/video/BV1noios',
+      videoUrl: 'https://cdn.example.com/default.mp4',
+      downloadOptions: {
+        video: {
+          '1080p': 'https://cdn.example.com/video-hevc.mp4',
+        },
+        videoCandidates: {
+          '1080p': [
+            {
+              url: 'https://cdn.example.com/video-hevc.mp4',
+              codecid: 12,
+            },
+            {
+              url: 'https://cdn.example.com/video-avc.mp4',
+              codecid: 7,
+            },
+          ],
+        },
+      },
+    } as any);
+    jest.spyOn(service, 'checkDownloadPermission').mockResolvedValue({
+      allowed: true,
+    } as any);
+    jest.spyOn(service, 'getDownloadUrl').mockResolvedValue({
+      downloadUrl: 'https://cdn.example.com/video-hevc.mp4',
+      format: VideoFormat.MP4,
+      quality: '1080p',
+      fileExtension: 'mp4',
+    } as any);
+    jest.spyOn(service, 'recordDownload').mockResolvedValue({ id: 'history-4' } as any);
+    downloadModeService.resolveGetUrlPolicy.mockResolvedValue({
+      iosCompatible: false,
+      allowWatermarkFallback: false,
+      probeMode: DouyinProbeMode.STRICT,
+    });
+
+    const result = await service.prepareNativeSilentDownload({
+      userId: 'user-1',
+      sourceUrl: 'https://www.bilibili.com/video/BV1noios',
+      clientType: 'MOBILE' as any,
+      iosCompatible: false,
+      runtimeTraceId: 'trace-5',
+    });
+
+    expect(downloadModeService.resolveGetUrlPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        overrides: expect.objectContaining({
+          iosCompatible: false,
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        mode: 'direct',
+        iosCompatible: false,
+      }),
+    );
+  });
+
+  it('avoids the async youtube task path when ios-compatible mode is explicitly forced', async () => {
+    jest.spyOn(service, 'parseVideo').mockResolvedValue({
+      title: 'YouTube Forced Direct',
+      platform: 'youtube',
+      sourceUrl: 'https://youtube.com/watch?v=direct',
+      videoUrl: 'https://youtube.com/watch?v=direct',
+      downloadOptions: {
+        video: {
+          '1080p': 'https://youtube.example.com/video-1080.mp4',
+        },
+      },
+    } as any);
+    jest.spyOn(service, 'checkDownloadPermission').mockResolvedValue({
+      allowed: true,
+    } as any);
+    const createDownloadTaskSpy = jest
+      .spyOn(service, 'createDownloadTask')
+      .mockResolvedValue({
+        id: 'task-direct-should-not-happen',
+        status: 'queued' as any,
+        progress: 0,
+      });
+    jest.spyOn(service, 'getDownloadUrl').mockResolvedValue({
+      downloadUrl: 'https://youtube.example.com/video-1080.mp4',
+      format: VideoFormat.MP4,
+      quality: '1080p',
+      fileExtension: 'mp4',
+    } as any);
+    jest.spyOn(service, 'recordDownload').mockResolvedValue({ id: 'history-5' } as any);
+    downloadModeService.resolveGetUrlPolicy.mockResolvedValue({
+      iosCompatible: true,
+      allowWatermarkFallback: false,
+      probeMode: DouyinProbeMode.STRICT,
+    });
+
+    const result = await service.prepareNativeSilentDownload({
+      userId: 'user-1',
+      sourceUrl: 'https://youtube.com/watch?v=direct',
+      clientType: 'MOBILE' as any,
+      iosCompatible: true,
+      runtimeTraceId: 'trace-6',
+    });
+
+    expect(createDownloadTaskSpy).not.toHaveBeenCalled();
+    expect(service.getDownloadUrl).toHaveBeenCalledWith(
+      expect.anything(),
+      VideoFormat.MP4,
+      '1080p',
+      true,
+      false,
+      DouyinProbeMode.STRICT,
+      'trace-6',
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        mode: 'direct',
+        iosCompatible: true,
+      }),
     );
   });
 });
