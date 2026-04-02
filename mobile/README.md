@@ -87,6 +87,15 @@ iOS 额外能力：
 - iOS 分享扩展：`expo-share-intent`
 - 重复分享去重：同一链接不会重复触发并发解析
 
+## 静默下载队列（2026-04-02 当前口径）
+
+- 当前定义是“前台免打扰队列”，不是 iOS 真后台持续下载。
+- 运行中任务仅在 App 处于前台 `active` 时推进；若中途离开，恢复后会按 `queued` 语义继续执行。
+- 本地持久化写入的是“可恢复快照”，不会把下载过程中的细碎进度持续落盘。
+- 运行时队列与持久化历史都会保留有限条最近完成/失败任务，避免本地队列无限膨胀。
+- 历史与结果列表按真实结束时间优先排序；已完成/失败任务展示“完成/失败时间”，进行中任务仍展示入队时间。
+- 若命中明显阻塞后续任务的错误（如相册权限缺失、登录态失效），队列会暂停并持久化该状态，等待用户处理后手动恢复。
+
 ## 图标与品牌资源口径（iOS）
 
 - iOS 运行时图标来源：`mobile/assets/ios-icon-tech-frosted-play.png`
@@ -101,6 +110,7 @@ iOS 额外能力：
 cd mobile
 cp .env.example .env
 npm install --legacy-peer-deps
+npm test -- src/store/silent-download-queue-store.test.ts
 npm run typecheck
 ```
 

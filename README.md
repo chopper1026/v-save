@@ -80,8 +80,28 @@ bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scri
 - 如果服务器没有安装 `git`，脚本会使用仓库压缩包部署；再次运行时默认复用现有安装目录，不会每次都重新下载。
 - 如果服务器安装了 `git`，再次运行脚本时也会默认复用当前安装目录中的现有代码；只有显式加上 `--refresh-repo` 时，才会执行 `git fetch && git pull`。
 - 脚本默认直接拉取 Docker Hub 上的官方 `latest` 镜像部署，不会在服务器本地构建镜像；如果需要固定版本或回滚，可通过 `--image-tag` 或 `V_SAVE_IMAGE_TAG` 指定 tag。
+- 一键部署默认将前端映射到宿主机 `7752` 端口、后端映射到宿主机 `7753` 端口，便于后续通过 1Panel/Nginx/Caddy 做反向代理。
 - 注册入口默认关闭。部署完成后可用自动生成的超管账号登录后台，在“系统设置”里手动开启注册入口。
-- 一键部署默认超管邮箱是 `admin@gmail.com`；密码仅首次生成时会在终端摘要里明文显示一次，后续重跑脚本不会重置也不会再次回显。
+- 一键部署默认超管邮箱是 `admin@gmail.com`；脚本每次运行都会明文输出当前超管邮箱和密码。若本次没有重置密码，终端会明确提示“脚本本次未重置”。
+
+#### 方式一补充：彻底清理后重装
+
+如果你需要丢弃旧的部署状态、容器、数据卷和端口占用，重新初始化一套全新的环境，可执行下面这组命令。
+
+注意：这会删除现有 MySQL 数据卷，旧数据不可恢复。
+
+```bash
+docker compose -f /opt/v-save/docker-compose.release.yml --profile with-mysql down 2>/dev/null || true
+docker rm -f v-save-mysql v-save-backend v-save-frontend 2>/dev/null || true
+docker volume rm v-save_mysql_data 2>/dev/null || true
+docker volume rm v-save_backend_tmp 2>/dev/null || true
+rm -rf /opt/v-save
+rm -f /opt/.v-save-deploy-state.env
+
+bash <(curl -fsSL https://raw.githubusercontent.com/chopper1026/v-save/main/scripts/deploy.sh)
+```
+
+如果你只想保留 MySQL 数据、但清理代码目录和容器，请不要删除 `v-save_mysql_data` 卷；同时需要保留 `/opt/.v-save-deploy-state.env`，否则脚本会生成新的数据库密码并与旧数据卷中的凭据不匹配。
 
 ### 方式二：预构建镜像发布到 Docker Hub
 

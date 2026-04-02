@@ -11,6 +11,7 @@
     "strip:ios-push-entitlement": "node ./scripts/strip-ios-push-entitlement.js",
     "ios": "npm run strip:ios-push-entitlement && expo run:ios --device",
     "prebuild": "npm run reset:native && expo prebuild && npm run strip:ios-push-entitlement",
+    "test": "tsx --test",
     "typecheck": "tsc --noEmit",
     "postinstall": "patch-package",
     "release": "npm run strip:ios-push-entitlement && expo run:ios --device --configuration Release"
@@ -48,6 +49,7 @@
     "@types/react": "~19.2.2",
     "babel-preset-expo": "^55.0.11",
     "patch-package": "^8.0.0",
+    "tsx": "^4.21.0",
     "typescript": "~5.9.2"
   }
 }

@@ -275,6 +275,47 @@ EOF
   assert_contains "$(cat "${state_repo}/.env")" "V_SAVE_IMAGE_TAG=2026-04-01-test1" "根目录 .env 应写入预构建镜像 tag"
   rm -rf "$state_root"
 
+  local legacy_state_root legacy_state_repo legacy_state_file
+  legacy_state_root="$(mktemp -d)"
+  legacy_state_repo="${legacy_state_root}/v-save"
+  legacy_state_file="${legacy_state_root}/.v-save-deploy-state.env"
+  mkdir -p "${legacy_state_repo}/backend"
+  : > "${legacy_state_repo}/.env"
+  cat >"$legacy_state_file" <<EOF
+FRONTEND_PORT=80
+BACKEND_PORT=3001
+MYSQL_PORT=13306
+MYSQL_ROOT_PASSWORD=legacy-root
+MYSQL_DATABASE=legacy-db
+MYSQL_USER=legacy-user
+MYSQL_PASSWORD=legacy-pass
+JWT_SECRET=legacy-jwt
+SUPER_ADMIN_EMAILS=legacy-admin@example.com
+SUPER_ADMIN_BOOTSTRAP_EMAIL=legacy-admin@example.com
+SUPER_ADMIN_BOOTSTRAP_PASSWORD=legacy-admin-pass
+SUPER_ADMIN_BOOTSTRAP_NICKNAME=Legacy Admin
+EOF
+  REPO_DIR="$legacy_state_repo"
+  DEPLOY_HOST="7.7.7.7"
+  USE_CN_MIRROR=0
+  FRONTEND_PORT=""
+  BACKEND_PORT=""
+  MYSQL_PORT=""
+  MYSQL_ROOT_PASSWORD=""
+  MYSQL_PASSWORD=""
+  MYSQL_USER=""
+  MYSQL_DATABASE=""
+  JWT_SECRET=""
+  SUPER_ADMIN_EMAILS=""
+  SUPER_ADMIN_BOOTSTRAP_EMAIL=""
+  SUPER_ADMIN_BOOTSTRAP_PASSWORD=""
+  SUPER_ADMIN_BOOTSTRAP_NICKNAME=""
+  SUPER_ADMIN_PASSWORD_GENERATED=0
+  load_or_generate_env
+  assert_eq "$FRONTEND_PORT" "7752" "旧版状态文件若仍保留 80 端口，应自动迁移到新的前端默认端口 7752"
+  assert_eq "$BACKEND_PORT" "7753" "旧版状态文件若仍保留 3001 端口，应自动迁移到新的后端默认端口 7753"
+  rm -rf "$legacy_state_root"
+
   local mysql_reconcile_marker
   mysql_reconcile_marker="$(mktemp)"
   rm -f "$mysql_reconcile_marker"

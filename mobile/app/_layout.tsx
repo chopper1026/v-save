@@ -19,6 +19,8 @@ import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
 import { ShareIntentProvider } from 'expo-share-intent';
 import { LaunchTransition } from '@/components/launch-transition';
+import { SilentDownloadCoordinator } from '@/components/silent-download-coordinator';
+import { SilentDownloadPersistenceBridge } from '@/components/silent-download-persistence-bridge';
 import { colors } from '@/constants/theme';
 import { useAuthGuard } from '@/hooks/use-auth-guard';
 import { useIntentStore } from '@/store/intent-store';
@@ -50,8 +52,11 @@ function AppShell() {
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="preview" />
+            <Stack.Screen name="silent-queue" />
             <Stack.Screen name="share" />
           </Stack>
+          <SilentDownloadPersistenceBridge />
+          <SilentDownloadCoordinator />
           <Toasts
             defaultPosition={ToastPosition.TOP}
             defaultDuration={3000}

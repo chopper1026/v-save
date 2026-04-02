@@ -175,17 +175,41 @@ export class BilibiliParser implements VideoParser {
   private async resolveShortUrl(shortUrl: string): Promise<string> {
     try {
       const response = await axios.get(shortUrl, {
-        maxRedirects: 5,
+        maxRedirects: 0,
         timeout: 10000,
+        validateStatus: (status) => status >= 200 && status < 400,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
         },
       });
-      return response.request.res.responseUrl || shortUrl;
-    } catch (error) {
+      return this.extractResolvedShortUrl(shortUrl, response) || shortUrl;
+    } catch (error: any) {
+      const resolvedUrl = this.extractResolvedShortUrl(shortUrl, error);
+      if (resolvedUrl) {
+        return resolvedUrl;
+      }
+
       this.logger.warn(`短链接解析失败: ${error.message}`);
       return shortUrl;
     }
+  }
+
+  private extractResolvedShortUrl(baseUrl: string, payload: any): string | null {
+    const location = payload?.response?.headers?.location || payload?.headers?.location;
+    if (typeof location === 'string' && location.trim()) {
+      try {
+        return new URL(location, baseUrl).toString();
+      } catch {
+        return location;
+      }
+    }
+
+    const responseUrl = payload?.request?.res?.responseUrl;
+    if (typeof responseUrl === 'string' && responseUrl.trim()) {
+      return responseUrl;
+    }
+
+    return null;
   }
 
   /**
