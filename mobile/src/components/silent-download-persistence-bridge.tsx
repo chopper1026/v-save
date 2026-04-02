@@ -9,6 +9,10 @@ import {
   isNativeSilentDownloadEngineAvailable,
   subscribeNativeSilentDownloadSnapshots,
 } from '@/lib/native-silent-download-bridge';
+import {
+  resolveNativeSilentDownloadBridgeAuthToken,
+  shouldConfigureNativeSilentDownloadBridge,
+} from '@/lib/native-silent-download-bridge-config';
 import { shouldRequestNativeSilentDownloadRuntimePermissions } from '@/lib/native-silent-download-permission-policy';
 import { shouldPersistSilentDownloadQueueSnapshot } from '@/lib/silent-download-runtime-policy';
 import { useAuthStore } from '@/store/auth-store';
@@ -73,6 +77,7 @@ const ensureNativeSilentDownloadNotificationPermission = async () => {
 
 export function SilentDownloadPersistenceBridge() {
   const token = useAuthStore((state) => state.token);
+  const authHydrated = useAuthStore((state) => state.hydrated);
   const settingsHydrated = useSilentDownloadSettingsStore((state) => state.hydrated);
   const queueHydrated = useSilentDownloadQueueStore((state) => state.hydrated);
   const enabled = useSilentDownloadSettingsStore((state) => state.enabled);
@@ -112,7 +117,10 @@ export function SilentDownloadPersistenceBridge() {
       if (useNativeEngine) {
         const snapshot = await bootstrapNativeSilentDownloadBridge({
           apiBaseUrl: API_BASE_URL,
-          authToken: token,
+          authToken: resolveNativeSilentDownloadBridgeAuthToken({
+            authHydrated,
+            token,
+          }),
           enabled: persistedEnabled,
           legacyState: persistedQueueState,
         });
@@ -144,7 +152,6 @@ export function SilentDownloadPersistenceBridge() {
     hydrateSettings,
     setQueueHydrated,
     setSettingsHydrated,
-    token,
     useNativeEngine,
   ]);
 
@@ -155,6 +162,15 @@ export function SilentDownloadPersistenceBridge() {
     void writeJson(SETTINGS_STORAGE_KEY, { enabled });
     if (!useNativeEngine) {
       previousEnabledRef.current = enabled;
+      return;
+    }
+    if (
+      !shouldConfigureNativeSilentDownloadBridge({
+        useNativeEngine,
+        settingsHydrated,
+        authHydrated,
+      })
+    ) {
       return;
     }
 
@@ -175,14 +191,17 @@ export function SilentDownloadPersistenceBridge() {
       }
       const snapshot = await configureNativeSilentDownloadBridge({
         apiBaseUrl: API_BASE_URL,
-        authToken: token,
+        authToken: resolveNativeSilentDownloadBridgeAuthToken({
+          authHydrated,
+          token,
+        }),
         enabled,
       });
       if (snapshot) {
         hydrateQueueState(snapshot);
       }
     })();
-  }, [enabled, hydrateQueueState, settingsHydrated, token, useNativeEngine]);
+  }, [authHydrated, enabled, hydrateQueueState, settingsHydrated, token, useNativeEngine]);
 
   useEffect(() => {
     if (!useNativeEngine || !queueHydrated) {

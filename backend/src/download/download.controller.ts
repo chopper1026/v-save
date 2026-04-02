@@ -505,6 +505,7 @@ export class DownloadController {
         userId,
         sourceUrl: prepareDto.sourceUrl,
         clientType,
+        iosCompatible: prepareDto.iosCompatible,
         runtimeTraceId: traceId,
       });
 

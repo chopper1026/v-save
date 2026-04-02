@@ -247,6 +247,7 @@ describe('DownloadController parseVideo', () => {
       fileName: '测试视频',
       quality: '1080p',
       platform: 'bilibili',
+      iosCompatible: true,
       authPolicy: 'bearer',
       runtimeTraceId: 'rt-download',
     });
@@ -264,6 +265,7 @@ describe('DownloadController parseVideo', () => {
       {
         sourceUrl: 'https://www.bilibili.com/video/BV1xx411c7mD',
         clientType: 'MOBILE',
+        iosCompatible: true,
       } as any,
       req,
     );
@@ -272,12 +274,14 @@ describe('DownloadController parseVideo', () => {
       userId: 'user-1',
       sourceUrl: 'https://www.bilibili.com/video/BV1xx411c7mD',
       clientType: 'MOBILE',
+      iosCompatible: true,
       runtimeTraceId: 'rt-download',
     });
     expect(result).toEqual({
       success: true,
       data: expect.objectContaining({
         mode: 'direct',
+        iosCompatible: true,
         authPolicy: 'bearer',
       }),
     });
@@ -291,6 +295,7 @@ describe('DownloadController parseVideo', () => {
       fileName: 'YouTube 视频',
       quality: '4k',
       platform: 'youtube',
+      iosCompatible: false,
       authPolicy: 'bearer',
       runtimeTraceId: 'rt-youtube',
     });
@@ -320,6 +325,7 @@ describe('DownloadController parseVideo', () => {
       data: expect.objectContaining({
         mode: 'serverTask',
         taskId: 'task-1',
+        iosCompatible: false,
         authPolicy: 'bearer',
       }),
     });
