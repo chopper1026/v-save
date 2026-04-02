@@ -19,6 +19,7 @@ import { colors } from '@/constants/theme';
 import { buildParsedVideoView } from '@/lib/download-flow';
 import { api } from '@/lib/api';
 import { resolveHomeHeroSubtitle } from '@/lib/home-hero-presentation';
+import { enqueueSilentDownloadSourceUrl } from '@/lib/native-silent-download-bridge';
 import { resolveHomeParseCtaState } from '@/lib/home-parse-cta';
 import { showInAppTopToast } from '@/lib/in-app-toast';
 import { buildShareAutoParseKey, extractSupportedVideoUrl } from '@/lib/link';
@@ -113,7 +114,6 @@ export default function HomeScreen() {
   const silentDownloadSettingsHydrated = useSilentDownloadSettingsStore((state) => state.hydrated);
   const setSilentDownloadEnabled = useSilentDownloadSettingsStore((state) => state.setEnabled);
   const silentDownloadQueueHydrated = useSilentDownloadQueueStore((state) => state.hydrated);
-  const enqueueSourceUrl = useSilentDownloadQueueStore((state) => state.enqueueSourceUrl);
   const silentQueueTasks = useSilentDownloadQueueStore((state) => state.tasks);
 
   const incomingUrl = useIntentStore((state) => state.incomingUrl);
@@ -261,27 +261,29 @@ export default function HomeScreen() {
         return;
       }
 
-      const { accepted } = enqueueSourceUrl(target);
-      if (accepted) {
-        silentQueuePulseAnim.stopAnimation();
-        silentQueuePulseAnim.setValue(0);
-        Animated.timing(silentQueuePulseAnim, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }).start(() => {
+      void enqueueSilentDownloadSourceUrl(target).then(({ accepted }) => {
+        if (accepted) {
+          silentQueuePulseAnim.stopAnimation();
           silentQueuePulseAnim.setValue(0);
-        });
-      } else {
+          Animated.timing(silentQueuePulseAnim, {
+            toValue: 1,
+            duration: 900,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }).start(() => {
+            silentQueuePulseAnim.setValue(0);
+          });
+          return;
+        }
+
         showInAppTopToast({
           title: '加入静默队列失败',
           message: '该链接已在静默下载队列中等待处理',
           level: 'warn',
         });
-      }
+      });
     },
-    [enqueueSourceUrl, setShareAutoParsePending, silentQueuePulseAnim]
+    [setShareAutoParsePending, silentQueuePulseAnim]
   );
 
   useEffect(() => {

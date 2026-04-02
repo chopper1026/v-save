@@ -13,6 +13,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/screen';
 import { colors } from '@/constants/theme';
 import { buildShareAutoParseKey, extractSupportedVideoUrl } from '@/lib/link';
+import {
+  clearFinishedSilentDownloadTasks,
+  enqueueSilentDownloadSourceUrl,
+  removeSilentDownloadTask,
+  resumeSilentDownloadQueue,
+} from '@/lib/native-silent-download-bridge';
 import { showInAppTopToast } from '@/lib/in-app-toast';
 import { logSilentDownloadDebug } from '@/lib/silent-download-debug';
 import { resolveSilentDownloadTaskTimeMeta } from '@/lib/silent-download-task-presentation';
@@ -28,6 +34,7 @@ import { useSilentDownloadSettingsStore } from '@/store/silent-download-settings
 
 const statusLabel: Record<SilentDownloadTask['status'], string> = {
   queued: '排队中',
+  preparing: '准备中',
   parsing: '解析中',
   downloading: '下载中',
   saving: '保存中',
@@ -37,6 +44,7 @@ const statusLabel: Record<SilentDownloadTask['status'], string> = {
 
 const statusColor: Record<SilentDownloadTask['status'], string> = {
   queued: colors.textSecondary,
+  preparing: colors.primary,
   parsing: colors.primary,
   downloading: colors.primary,
   saving: colors.success,
@@ -117,10 +125,6 @@ export default function SilentQueueScreen() {
   const tasks = useSilentDownloadQueueStore((state) => state.tasks);
   const pausedReason = useSilentDownloadQueueStore((state) => state.pausedReason);
   const pauseMessage = useSilentDownloadQueueStore((state) => state.pauseMessage);
-  const resumeQueue = useSilentDownloadQueueStore((state) => state.resumeQueue);
-  const clearFinished = useSilentDownloadQueueStore((state) => state.clearFinished);
-  const removeTask = useSilentDownloadQueueStore((state) => state.removeTask);
-  const enqueueSourceUrl = useSilentDownloadQueueStore((state) => state.enqueueSourceUrl);
   const handledShareIntentKeyRef = useRef<string | null>(null);
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
 
@@ -144,20 +148,21 @@ export default function SilentQueueScreen() {
       });
       return;
     }
-    const { accepted } = enqueueSourceUrl(target);
-    logSilentDownloadDebug('queue:enqueue', {
-      source,
-      target,
-      dedupKey,
-      accepted,
-    });
-    if (!accepted) {
-      showInAppTopToast({
-        title: '加入静默队列失败',
-        message: '该链接已在静默下载队列中等待处理',
-        level: 'warn',
+    void enqueueSilentDownloadSourceUrl(target).then(({ accepted }) => {
+      logSilentDownloadDebug('queue:enqueue', {
+        source,
+        target,
+        dedupKey,
+        accepted,
       });
-    }
+      if (!accepted) {
+        showInAppTopToast({
+          title: '加入静默队列失败',
+          message: '该链接已在静默下载队列中等待处理',
+          level: 'warn',
+        });
+      }
+    });
   };
 
   useEffect(() => {
@@ -201,7 +206,13 @@ export default function SilentQueueScreen() {
 
   const { activeTask, finishedTasks } = useMemo(() => {
     const activeTask =
-      tasks.find((task) => task.status === 'parsing' || task.status === 'downloading' || task.status === 'saving') ||
+      tasks.find(
+        (task) =>
+          task.status === 'preparing' ||
+          task.status === 'parsing' ||
+          task.status === 'downloading' ||
+          task.status === 'saving'
+      ) ||
       tasks.find((task) => task.status === 'queued') ||
       null;
 
@@ -250,7 +261,12 @@ export default function SilentQueueScreen() {
             <Text style={styles.noticeText}>
               {pauseMessage || '静默下载队列已暂停，请处理问题后手动恢复。'}
             </Text>
-            <Pressable style={styles.resumeBtn} onPress={resumeQueue}>
+            <Pressable
+              style={styles.resumeBtn}
+              onPress={() => {
+                void resumeSilentDownloadQueue();
+              }}
+            >
               <Text style={styles.resumeBtnText}>恢复队列</Text>
             </Pressable>
           </View>
@@ -277,7 +293,12 @@ export default function SilentQueueScreen() {
           <Text style={styles.sectionTitle}>当前任务</Text>
         </View>
         {activeTask ? (
-          <TaskCard task={activeTask} onRemove={removeTask} />
+          <TaskCard
+            task={activeTask}
+            onRemove={(taskId) => {
+              void removeSilentDownloadTask(taskId);
+            }}
+          />
         ) : (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>当前没有正在执行的静默下载任务。</Text>
@@ -287,14 +308,26 @@ export default function SilentQueueScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>历史与结果</Text>
           {finishedTasks.length > 0 && (
-            <Pressable onPress={clearFinished}>
+            <Pressable
+              onPress={() => {
+                void clearFinishedSilentDownloadTasks();
+              }}
+            >
               <Text style={styles.clearText}>清空已完成/失败</Text>
             </Pressable>
           )}
         </View>
 
         {finishedTasks.length > 0 ? (
-          finishedTasks.map((task) => <TaskCard key={task.id} task={task} onRemove={removeTask} />)
+          finishedTasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onRemove={(taskId) => {
+                void removeSilentDownloadTask(taskId);
+              }}
+            />
+          ))
         ) : (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>静默下载结果会在这里保留，便于你回头查看。</Text>

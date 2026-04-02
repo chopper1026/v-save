@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { logSilentDownloadDebug } from '@/lib/silent-download-debug';
+import { isNativeSilentDownloadEngineAvailable } from '@/lib/native-silent-download-bridge';
 import {
   resolveSilentDownloadCoordinatorAction,
   shouldRetryFailedSilentDownloadTask,
@@ -10,6 +11,10 @@ import { useSilentDownloadQueueStore } from '@/store/silent-download-queue-store
 import { runSilentDownloadTask } from '@/lib/silent-download-worker';
 
 export function SilentDownloadCoordinator() {
+  if (isNativeSilentDownloadEngineAvailable()) {
+    return null;
+  }
+
   const token = useAuthStore((state) => state.token);
   const queueHydrated = useSilentDownloadQueueStore((state) => state.hydrated);
   const tasks = useSilentDownloadQueueStore((state) => state.tasks);

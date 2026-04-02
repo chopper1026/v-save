@@ -6,6 +6,7 @@ import type { PersistedSilentDownloadQueueState } from './silent-download-persis
 
 export type SilentDownloadTaskStatus =
   | 'queued'
+  | 'preparing'
   | 'parsing'
   | 'downloading'
   | 'saving'
@@ -42,6 +43,7 @@ type ReduceAction =
 
 const ACTIVE_STATUSES = new Set<SilentDownloadTaskStatus>([
   'queued',
+  'preparing',
   'parsing',
   'downloading',
   'saving',
@@ -84,7 +86,12 @@ export const recoverInterruptedSilentDownloadTasks = (
   tasks: SilentDownloadTask[]
 ): SilentDownloadTask[] => {
   return tasks.map((task) => {
-    if (task.status === 'parsing' || task.status === 'downloading' || task.status === 'saving') {
+    if (
+      task.status === 'preparing' ||
+      task.status === 'parsing' ||
+      task.status === 'downloading' ||
+      task.status === 'saving'
+    ) {
       return {
         ...task,
         status: 'queued',
@@ -140,6 +147,7 @@ export const trimRuntimeSilentDownloadTasks = (
 export const getSilentDownloadTaskSummary = (tasks: SilentDownloadTask[]) => {
   const inFlight = tasks.filter((task) =>
     task.status === 'queued' ||
+    task.status === 'preparing' ||
     task.status === 'parsing' ||
     task.status === 'downloading' ||
     task.status === 'saving'

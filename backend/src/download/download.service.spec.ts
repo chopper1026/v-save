@@ -1526,6 +1526,150 @@ describe('DownloadService getDownloadUrl', () => {
   });
 });
 
+describe('DownloadService prepareNativeSilentDownload', () => {
+  let service: DownloadService;
+  const parsersService = {} as any;
+  const downloadModeService = {
+    resolveGetUrlPolicy: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new DownloadService(
+      {} as any,
+      {} as any,
+      parsersService,
+      {} as any,
+      {} as any,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      downloadModeService as any,
+    );
+  });
+
+  it('returns a direct native silent download payload for non-youtube sources', async () => {
+    jest.spyOn(service, 'parseVideo').mockResolvedValue({
+      title: 'Bili Test',
+      platform: 'bilibili',
+      sourceUrl: 'https://www.bilibili.com/video/BV1test',
+      videoUrl: 'https://cdn.example.com/default.mp4',
+      downloadOptions: {
+        video: {
+          '1080p': 'https://cdn.example.com/video-1080.mp4',
+        },
+      },
+    } as any);
+    jest.spyOn(service, 'checkDownloadPermission').mockResolvedValue({
+      allowed: true,
+    } as any);
+    jest.spyOn(service, 'getDownloadUrl').mockResolvedValue({
+      downloadUrl: 'https://cdn.example.com/video-1080.mp4',
+      format: VideoFormat.MP4,
+      quality: '1080p',
+      fileExtension: 'mp4',
+    } as any);
+    jest.spyOn(service, 'recordDownload').mockResolvedValue({ id: 'history-1' } as any);
+    downloadModeService.resolveGetUrlPolicy.mockResolvedValue({
+      iosCompatible: false,
+      allowWatermarkFallback: false,
+      probeMode: DouyinProbeMode.STRICT,
+    });
+
+    const result = await service.prepareNativeSilentDownload({
+      userId: 'user-1',
+      sourceUrl: ' https://www.bilibili.com/video/BV1test ',
+      clientType: 'MOBILE' as any,
+      runtimeTraceId: 'trace-1',
+    });
+
+    expect(result).toEqual({
+      mode: 'direct',
+      downloadUrl: 'https://cdn.example.com/video-1080.mp4',
+      fileExtension: 'mp4',
+      fileName: 'Bili Test',
+      quality: '1080p',
+      platform: 'bilibili',
+      authPolicy: 'none',
+      runtimeTraceId: 'trace-1',
+    });
+    expect(service.getDownloadUrl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUrl: 'https://www.bilibili.com/video/BV1test',
+      }),
+      VideoFormat.MP4,
+      '1080p',
+      false,
+      false,
+      DouyinProbeMode.STRICT,
+      'trace-1',
+    );
+    expect(service.recordDownload).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        sourceUrl: 'https://www.bilibili.com/video/BV1test',
+      }),
+      VideoFormat.MP4,
+      '1080p',
+      'https://cdn.example.com/video-1080.mp4',
+    );
+  });
+
+  it('returns a background task payload for high-quality youtube native silent downloads', async () => {
+    jest.spyOn(service, 'parseVideo').mockResolvedValue({
+      title: 'YouTube Test',
+      platform: 'youtube',
+      sourceUrl: 'https://youtube.com/watch?v=test',
+      videoUrl: 'https://youtube.com/watch?v=test',
+      downloadOptions: {
+        video: {
+          '1080p': 'https://youtube.example.com/video-1080.mp4',
+        },
+      },
+    } as any);
+    jest.spyOn(service, 'checkDownloadPermission').mockResolvedValue({
+      allowed: true,
+    } as any);
+    const createDownloadTaskSpy = jest
+      .spyOn(service, 'createDownloadTask')
+      .mockResolvedValue({
+        id: 'task-1',
+        status: 'queued' as any,
+        progress: 0,
+      });
+
+    const result = await service.prepareNativeSilentDownload({
+      userId: 'user-1',
+      sourceUrl: 'https://youtube.com/watch?v=test',
+      clientType: 'MOBILE' as any,
+      runtimeTraceId: 'trace-2',
+    });
+
+    expect(result).toEqual({
+      mode: 'serverTask',
+      taskId: 'task-1',
+      pollIntervalMs: 1200,
+      fileName: 'YouTube Test',
+      quality: '1080p',
+      platform: 'youtube',
+      authPolicy: 'bearer',
+      runtimeTraceId: 'trace-2',
+    });
+    expect(createDownloadTaskSpy).toHaveBeenCalledWith(
+      'user-1',
+      'https://youtube.com/watch?v=test',
+      expect.objectContaining({
+        sourceUrl: 'https://youtube.com/watch?v=test',
+      }),
+      VideoFormat.MP4,
+      '1080p',
+      'trace-2',
+    );
+  });
+});
+
 describe('DownloadService checkDownloadPermission', () => {
   it('allows active users to download any platform and quality without membership gating', async () => {
     const usersService = {

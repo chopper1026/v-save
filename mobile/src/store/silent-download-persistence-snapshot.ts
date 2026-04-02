@@ -9,7 +9,7 @@ export interface PersistedSilentDownloadQueueState {
   pauseMessage: string | null;
 }
 
-const INTERRUPTED_STATUSES = new Set(['parsing', 'downloading', 'saving']);
+const INTERRUPTED_STATUSES = new Set(['preparing', 'parsing', 'downloading', 'saving']);
 const FINISHED_STATUSES = new Set(['completed', 'failed']);
 
 const stripTransientFields = (task: SilentDownloadTask): SilentDownloadTask => ({
