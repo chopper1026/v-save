@@ -202,7 +202,6 @@ Web 默认地址：`http://localhost:3000`
 cd mobile
 cp .env.example .env
 npm run typecheck
-npm run prebuild
 npm run ios
 # 或 npm run android
 ```
@@ -211,6 +210,7 @@ npm run ios
 
 - `EXPO_PUBLIC_API_BASE_URL` 必须指向手机能访问的后端地址。
 - 真机调试不要使用 `localhost`，请改成 `http://<LAN-IP>:3001/api`。
+- `npm run prebuild` 不再用于日常启动；如果你确实要重建原生工程，请改用 `npm run native:rebuild`。
 
 #### 5. 启动 Companion
 

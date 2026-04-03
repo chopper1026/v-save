@@ -7,14 +7,16 @@
     "start": "expo start --dev-client",
     "start:go": "expo start",
     "android": "expo run:android",
-    "reset:native": "node ./scripts/reset-generated-native-projects.js",
+    "reset:native": "node ./scripts/guard-native-prebuild.js",
+    "native:rebuild": "VSAVE_FORCE_NATIVE_REGENERATE=1 node ./scripts/guard-native-prebuild.js && expo prebuild && npm run strip:ios-push-entitlement",
     "strip:ios-push-entitlement": "node ./scripts/strip-ios-push-entitlement.js",
     "ios": "npm run strip:ios-push-entitlement && expo run:ios --device",
-    "prebuild": "npm run reset:native && expo prebuild && npm run strip:ios-push-entitlement",
+    "prebuild": "node ./scripts/guard-native-prebuild.js",
     "test": "tsx --test",
     "typecheck": "tsc --noEmit",
     "postinstall": "patch-package",
-    "release": "npm run strip:ios-push-entitlement && expo run:ios --device --configuration Release"
+    "ios:release": "npm run strip:ios-push-entitlement && expo run:ios --device --configuration Release",
+    "release": "npm run ios:release"
   },
   "dependencies": {
     "@backpackapp-io/react-native-toast": "^0.15.1",

@@ -120,13 +120,17 @@ npm run typecheck
 ### 运行（开发客户端）
 
 ```bash
-npm run prebuild
 npm run ios
 # 或
 npm run android
 ```
 
 说明：`expo-share-intent` 需要 dev client（`expo run:*` 或 EAS Build），Expo Go 无法完整验证分享扩展。
+
+补充说明：
+- `npm run prebuild` 不再是日常开发命令；它现在只会阻止误操作，因为仓库里的 `ios/` 已纳入版本管理且包含手写原生代码。
+- 只有在你明确要重建原生工程时，才使用 `npm run native:rebuild`。
+- 本地 iOS Release 包安装到真机请使用 `npm run ios:release`；`npm run release` 仅保留为兼容别名。
 
 ## 环境变量
 

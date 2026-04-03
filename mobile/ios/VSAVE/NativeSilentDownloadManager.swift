@@ -837,6 +837,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
       return
     }
 
+    let taskTitle = snapshot.tasks[index].title?.nilIfEmpty ?? "视频"
     snapshot.tasks[index].status = .failed
     snapshot.tasks[index].progress = 0
     snapshot.tasks[index].updatedAt = nowMs()
@@ -852,7 +853,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     emitSnapshot()
     sendLocalNotification(
       title: "静默下载失败",
-      body: "\(snapshot.tasks[index].title?.nilIfEmpty ?? "视频")：\(error.localizedDescription)"
+      body: "\(taskTitle)：\(error.localizedDescription)"
     )
     startNextQueuedTaskIfPossible()
   }
@@ -927,10 +928,6 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     endRuntimeBackgroundTask(taskId: taskId)
     persistSnapshot()
     emitSnapshot()
-    sendLocalNotification(
-      title: "静默下载完成",
-      body: "\(snapshot.tasks[index].title?.nilIfEmpty ?? "视频") 已保存到系统相册"
-    )
     startNextQueuedTaskIfPossible()
   }
 
