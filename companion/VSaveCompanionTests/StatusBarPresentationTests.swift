@@ -19,7 +19,7 @@ final class StatusBarPresentationTests: XCTestCase {
                 lastRestartAt: "2026-03-24T02:09:20.860Z",
                 serverStatus: "running",
                 serverAddress: "http://127.0.0.1:37219",
-                adminPageOrigin: "http://admin.example.com",
+                adminPageOrigin: "https://admin.example.com",
                 chromeStatus: "ready",
                 currentSession: PublicLocalBridgeSession(
                     authSessionId: "bridge-1",
@@ -42,7 +42,7 @@ final class StatusBarPresentationTests: XCTestCase {
         XCTAssertEqual(snapshot.helperStatus, "运行中")
         XCTAssertEqual(snapshot.chromeStatus, "已检测到")
         XCTAssertEqual(snapshot.currentSessionStatus, "等待扫码")
-        XCTAssertEqual(snapshot.adminPageOrigin, "http://admin.example.com")
+        XCTAssertEqual(snapshot.adminPageOrigin, "https://admin.example.com")
         XCTAssertTrue(snapshot.openAtLoginEnabled)
     }
 
@@ -54,7 +54,7 @@ final class StatusBarPresentationTests: XCTestCase {
             helperStatus: "运行中",
             helperTone: .success,
             serverAddress: "http://127.0.0.1:37219",
-            adminPageOrigin: "http://admin.example.com",
+            adminPageOrigin: "https://admin.example.com",
             chromeStatus: "已检测到",
             currentSessionId: "无活动会话",
             currentSessionStatus: "--",

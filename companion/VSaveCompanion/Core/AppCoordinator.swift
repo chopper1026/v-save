@@ -318,7 +318,7 @@ final class CompanionAppCoordinator {
         alert.addButton(withTitle: "取消")
 
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
-        textField.placeholderString = "http://admin.example.com"
+        textField.placeholderString = "https://admin.example.com"
         textField.stringValue = adminPageOriginController.currentOrigin() ?? ""
         alert.accessoryView = textField
 

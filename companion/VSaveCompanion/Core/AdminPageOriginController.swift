@@ -36,7 +36,7 @@ final class AdminPageOriginController {
         guard let normalized = CompanionConfig.normalizedOriginURL(trimmed)?.absoluteString else {
             return AdminPageOriginState(
                 origin: currentOrigin(),
-                lastError: "请输入完整的管理端页面地址，例如 http://admin.example.com 或 https://admin.example.com"
+                lastError: "请输入完整的管理端页面地址，例如 https://admin.example.com"
             )
         }
 
