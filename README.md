@@ -1,10 +1,10 @@
 # V-SAVE
 
-v-save是一个多平台视频下载器，目前支持抖音、b站、快手、小红书、Youtube平台的视频解析预览和下载，其中抖音和b站已接入官方接口实现了快速解析、多档画质、cdn直链下载，其他平台适配中。
+v-save 是一个多平台视频下载器，目前支持抖音、B 站、快手、小红书、YouTube 平台的视频解析预览和下载，其中抖音、B 站、快手已接入官方接口，支持登录态管理与多档画质选择，其他平台持续适配中。
 
 ## 功能特性
 
-- 统一后端 API，覆盖 Web、ios 、companion 三端。
+- 统一后端 API，覆盖 Web、Mobile（iOS/Android）、Companion 三端。
 - 支持多平台解析、预览、下载任务创建、文件回取与合并下载。
 - 支持多平台登录态管理，抖音、b站、快手均已实现官方网页版接口对接以获取更高画质，兼容服务器环境。
 - 包含个人中心和后台管理。
@@ -222,7 +222,7 @@ npm run dev
 
 Companion 默认仅监听本机：`http://127.0.0.1:37219`
 
-### 方式三：Docker Compose 本地联调
+### 方式四：Docker Compose 本地联调
 
 适合本机调试 Web + Backend：
 
@@ -318,41 +318,92 @@ bash scripts/deploy.test.sh
 
 ## API 简览
 
-### 认证
+所有接口（除标注外）均需要 JWT 认证（`Authorization: Bearer <token>`）。
+
+### 公开接口
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/system-settings/public`
+- `GET /api/proxy/fetch`
+- `POST /api/runtime/client-events`
+- `GET /healthz`
 
-### 后台系统设置
+### 下载主链路（需登录）
 
-- `GET /api/admin/system-settings`
-- `PUT /api/admin/system-settings`
+- `POST /api/download/parse` — 解析视频链接
+- `POST /api/download/get-url` — 获取下载链接
+- `POST /api/download/create-task` — 创建异步下载任务
+- `GET /api/download/tasks/:id` — 查询任务状态
+- `GET /api/download/tasks/:id/file` — 下载任务产物文件
+- `GET /api/download/merge` — 合流下载
+- `POST /api/download/prepare-native-silent` — 原生静默下载准备
+- `GET /api/download/quality-status` — 查询画质补全状态
 
-### 下载主链路
+### 下载历史（需登录）
 
-- `POST /api/download/parse`
-- `POST /api/download/get-url`
-- `POST /api/download/create-task`
-- `GET /api/download/tasks/:id`
-- `GET /api/download/tasks/:id/file`
-- `GET /api/download/merge`
+- `GET /api/download/history` — 查询下载历史（支持分页、平台、日期筛选）
+- `GET /api/download/stats` — 下载统计
+- `DELETE /api/download/history` — 按条件清空历史
+- `DELETE /api/download/history/batch` — 批量删除历史
+- `DELETE /api/download/history/:id` — 删除单条历史
 
-### 用户
+### 用户（需登录）
 
 - `GET /api/users/profile`
 - `PATCH /api/users/profile`
 - `PATCH /api/users/account/password`
 - `PATCH /api/users/account/phone`
 
-### 抖音登录态管理（仅超级管理员）
+### 通知（需登录）
+
+- `GET /api/notifications`
+- `GET /api/notifications/unread-count`
+- `PATCH /api/notifications/:id/read`
+- `PATCH /api/notifications/read-all`
+- `DELETE /api/notifications/clear`
+
+### B 站登录态管理（需登录 + 超级管理员）
+
+- `GET /api/bilibili/auth/status`
+- `POST /api/bilibili/auth/qrcode`
+- `GET /api/bilibili/auth/qrcode/poll`
+- `POST /api/bilibili/auth/refresh`
+- `DELETE /api/bilibili/auth/session`
+
+### 抖音登录态管理（需登录 + 超级管理员）
 
 - `GET /api/douyin/auth/status`
 - `POST /api/douyin/auth/session`
-- `DELETE /api/douyin/auth/session`
 - `POST /api/douyin/auth/bridge/start`
 - `GET /api/douyin/auth/bridge/status`
 - `POST /api/douyin/auth/bridge/complete`
+- `DELETE /api/douyin/auth/session`
+
+### 快手登录态管理（需登录 + 超级管理员）
+
+- `GET /api/kuaishou/auth/status`
+- `POST /api/kuaishou/auth/qrcode`
+- `GET /api/kuaishou/auth/qrcode/poll`
+- `POST /api/kuaishou/auth/session`
+- `DELETE /api/kuaishou/auth/session`
+
+### 后台管理（需登录 + 超级管理员）
+
+- `GET /api/admin/users` — 用户列表
+- `GET /api/admin/users/audit` — 用户审计日志
+- `PATCH /api/admin/users/:id/role` — 修改用户角色
+- `PATCH /api/admin/users/:id/status` — 修改用户状态
+- `GET /api/admin/system-settings` — 系统设置
+- `PUT /api/admin/system-settings` — 更新系统设置
+- `GET /api/admin/audit` — 操作审计
+- `GET /api/admin/download-modes/schema` — 下载模式 Schema
+- `GET /api/admin/download-modes/configs` — 下载模式配置
+- `PUT /api/admin/download-modes/configs/:platform/:clientType` — 更新下载模式配置
+- `GET /api/admin/runtime-dashboard` — Runtime 监控面板
+- `GET /api/admin/runtime-dashboard/chains` — Runtime 链路列表
+- `GET /api/admin/runtime-dashboard/chains/:traceId` — Runtime 链路详情
+- `GET /api/auth/health` — 认证健康状态
 
 ## 安全说明
 
