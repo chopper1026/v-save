@@ -31,7 +31,7 @@ import { HealthController } from './health/health.controller';
           username: configService.get<string>('DATABASE_USER', 'root'),
           password: configService.get<string>('DATABASE_PASSWORD', ''),
           database: configService.get<string>('DATABASE_NAME', 'v_save'),
-          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          autoLoadEntities: true,
           synchronize: configService.get<string>('DB_SYNCHRONIZE', 'true') === 'true',
         };
       },

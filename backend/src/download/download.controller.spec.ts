@@ -51,7 +51,7 @@ describe('DownloadController parseVideo', () => {
     );
 
     try {
-      await controller.parseVideo({ url: 'https://v.douyin.com/test/' } as any);
+      await controller.parseVideo({ url: 'https://v.douyin.com/test/' } as any, { user: { id: 'user-1' } } as any);
       fail('expected parseVideo to throw');
     } catch (error: any) {
       expect(error).toBeInstanceOf(BadRequestException);
@@ -79,7 +79,7 @@ describe('DownloadController parseVideo', () => {
     downloadService.parseVideo.mockResolvedValue(null);
 
     try {
-      await controller.parseVideo({ url: 'not-a-video' } as any);
+      await controller.parseVideo({ url: 'not-a-video' } as any, { user: { id: 'user-1' } } as any);
       fail('expected parseVideo to throw');
     } catch (error: any) {
       expect(error).toBeInstanceOf(BadRequestException);
@@ -109,7 +109,7 @@ describe('DownloadController parseVideo', () => {
     const result = await controller.parseVideo({
       url: 'https://v.douyin.com/test/',
       clientType: 'WEB',
-    } as any);
+    } as any, { user: { id: 'user-1' } } as any);
 
     expect(runtimeMonitorService.recordServerEvent).toHaveBeenCalledWith(
       expect.objectContaining({

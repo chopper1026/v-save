@@ -126,12 +126,13 @@ export class DownloadController {
 
   /**
    * 解析视频
-   * 公开接口，无需认证
+   * 需要认证，未登录用户无法解析
    */
+  @UseGuards(JwtAuthGuard)
   @Post('parse')
   async parseVideo(
     @Body() parseVideoDto: ParseVideoDto,
-    @Request() req?: RequestWithUser,
+    @Request() req: RequestWithUser,
   ) {
     const startedAt = Date.now();
     const { url, clientType } = parseVideoDto;

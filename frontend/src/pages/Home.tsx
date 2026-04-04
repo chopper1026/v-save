@@ -410,6 +410,13 @@ export default function Home() {
   }, [downloadStatus])
 
   const handleParse = () => {
+    if (!token) {
+      setDownloadStatus('error')
+      setError('请先登录后再解析')
+      navigate('/login')
+      return
+    }
+
     const extractedUrl = extractSupportedVideoUrl(url)
     if (!extractedUrl) {
       setDownloadStatus('idle')
