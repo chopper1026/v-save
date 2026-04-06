@@ -10,6 +10,7 @@ private let nativeSilentDownloadConfigStorageKey = "vsave-native-silent-download
 private let nativeSilentDownloadAuthTokenService = "com.vsave.mobile.native-silent-download"
 private let nativeSilentDownloadAuthTokenAccount = "auth-token"
 private let nativeSilentDownloadFinishedLimit = 20
+private let nativeSilentDownloadAlbumTitle = "V-SAVE"
 
 private enum NativeSilentDownloadStatus: String, Codable {
   case queued
@@ -1059,9 +1060,26 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     return nil
   }
 
+  private func fetchDownloadAlbum() -> PHAssetCollection? {
+    let options = PHFetchOptions()
+    options.predicate = NSPredicate(format: "localizedTitle = %@", nativeSilentDownloadAlbumTitle)
+    let collections = PHAssetCollection.fetchAssetCollections(
+      with: .album,
+      subtype: .albumRegular,
+      options: options
+    )
+
+    return collections.firstObject
+  }
+
   private func saveToPhotoLibrary(fileURL: URL) async throws -> String? {
-    let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-    let granted = status == .authorized || status == .limited
+    let readWriteStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+    let addOnlyStatus = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+    let granted =
+      readWriteStatus == .authorized ||
+      readWriteStatus == .limited ||
+      addOnlyStatus == .authorized ||
+      addOnlyStatus == .limited
     if !granted {
       throw NativeSilentDownloadPauseError(
         reason: "photo_permission_denied",
@@ -1070,10 +1088,28 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     }
 
     return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String?, Error>) in
+      let existingAlbum = self.fetchDownloadAlbum()
       var localIdentifier: String?
       PHPhotoLibrary.shared().performChanges({
-        let changeRequest = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: fileURL)
-        localIdentifier = changeRequest?.placeholderForCreatedAsset?.localIdentifier
+        guard let assetChangeRequest = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: fileURL),
+              let assetPlaceholder = assetChangeRequest.placeholderForCreatedAsset
+        else {
+          return
+        }
+
+        localIdentifier = assetPlaceholder.localIdentifier
+        let assetPlaceholders = NSArray(object: assetPlaceholder)
+
+        if let existingAlbum,
+           let albumChangeRequest = PHAssetCollectionChangeRequest(for: existingAlbum) {
+          albumChangeRequest.addAssets(assetPlaceholders)
+        } else {
+          let albumChangeRequest =
+            PHAssetCollectionChangeRequest.creationRequestForAssetCollection(
+              withTitle: nativeSilentDownloadAlbumTitle
+            )
+          albumChangeRequest.addAssets(assetPlaceholders)
+        }
       }, completionHandler: { success, error in
         if let error {
           continuation.resume(throwing: error)
