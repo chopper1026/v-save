@@ -6,6 +6,7 @@ import {
   IOS_PHOTOS_INCOMPATIBLE_ERROR_CODE,
   isIosPhotosIncompatibleError as isIosPhotosIncompatibleMediaError,
 } from './media-error-codes';
+import { persistAssetToDownloadAlbum } from './media-download-album';
 
 const VIDEO_EXTS = new Set(['mp4', 'mov', 'm4v', 'webm']);
 const AUDIO_EXTS = new Set(['m4a', 'aac', 'mp3', 'wav', 'ogg', 'opus', 'flac']);
@@ -222,7 +223,7 @@ export async function downloadToDevice(
       onStageChange?.('saving');
       const mediaLibraryUri = normalizeUriForMediaLibrary(persistedUri);
       const asset = await MediaLibrary.createAssetAsync(mediaLibraryUri);
-      await MediaLibrary.createAlbumAsync('V-SAVE', asset, false).catch(() => undefined);
+      await persistAssetToDownloadAlbum(asset, MediaLibrary).catch(() => undefined);
       return {
         localUri: persistedUri,
         savedToLibrary: true,
