@@ -4,7 +4,6 @@ import {
   Alert,
   Image,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -12,7 +11,6 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/screen';
 import { AccountTabSkeleton } from '@/components/tab-first-render-skeletons';
@@ -22,7 +20,6 @@ import {
   resolveAccountCoverPresentation,
   resolveAccountPagePresentation,
 } from '@/lib/account-page-presentation';
-import { cleanupDuplicateDownloadAlbums } from '@/lib/media-album-maintenance';
 import { useAuthStore } from '@/store/auth-store';
 import type { UserProfile } from '@/types/api';
 
@@ -119,7 +116,6 @@ export default function AccountScreen() {
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
-  const [cleaningAlbums, setCleaningAlbums] = useState(false);
   const [error, setError] = useState('');
 
   const [editorType, setEditorType] = useState<'none' | 'nickname' | 'phone'>(
@@ -276,54 +272,6 @@ export default function AccountScreen() {
       setSavingPhone(false);
     }
   };
-
-  const runDownloadAlbumCleanup = useCallback(async () => {
-    try {
-      setCleaningAlbums(true);
-      const result = await cleanupDuplicateDownloadAlbums(MediaLibrary);
-
-      if (result.foundAlbums === 0) {
-        Alert.alert('无需清理', '没有找到 V-SAVE 相册。');
-        return;
-      }
-
-      if (result.deletedAlbums === 0) {
-        Alert.alert('无需清理', '当前只有一个 V-SAVE 相册，没有重复项。');
-        return;
-      }
-
-      const mergedSummary = result.mergedAssets
-        ? `，并补合并 ${result.mergedAssets} 个项目`
-        : '';
-      Alert.alert(
-        '清理完成',
-        `已删除 ${result.deletedAlbums} 个重复 V-SAVE 相册${mergedSummary}。视频仍保留在系统图库里。`
-      );
-    } catch (err: any) {
-      Alert.alert(
-        '清理失败',
-        getErrorMessage(err, '清理重复相册失败，请稍后重试')
-      );
-    } finally {
-      setCleaningAlbums(false);
-    }
-  }, []);
-
-  const onPressCleanupDownloadAlbums = useCallback(() => {
-    Alert.alert(
-      '清理重复 V-SAVE 相册',
-      '会把所有同名 V-SAVE 相册里的内容合并到一个相册，并删除多余和空相册。不会删除视频本身。',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '开始清理',
-          onPress: () => {
-            void runDownloadAlbumCleanup();
-          },
-        },
-      ]
-    );
-  }, [runDownloadAlbumCleanup]);
 
   const profileDirty =
     String(profile?.nickname || '').trim() !== String(nickname || '').trim() ||
@@ -538,32 +486,6 @@ export default function AccountScreen() {
               <Text style={styles.syncedHintText}>资料已同步</Text>
             </View>
           )}
-
-          {Platform.OS === 'ios' ? (
-            <Pressable
-              style={({ pressed }) => [
-                styles.maintenanceBtn,
-                pressed && !cleaningAlbums && styles.maintenanceBtnPressed,
-              ]}
-              onPress={onPressCleanupDownloadAlbums}
-              disabled={cleaningAlbums}
-            >
-              {cleaningAlbums ? (
-                <ActivityIndicator color={colors.primaryDark} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="albums-outline" size={18} color={colors.primaryDark} />
-                  <View style={styles.maintenanceMeta}>
-                    <Text style={styles.maintenanceTitle}>清理重复 V-SAVE 相册</Text>
-                    <Text style={styles.maintenanceCaption}>
-                      合并成一个相册，删除多余和空相册
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                </>
-              )}
-            </Pressable>
-          ) : null}
         </View>
 
         <Pressable
@@ -930,35 +852,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '800',
     fontSize: 14,
-  },
-  maintenanceBtn: {
-    minHeight: 60,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#D6E4FF',
-    backgroundColor: '#F7FAFF',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  maintenanceBtnPressed: {
-    transform: [{ scale: 0.988 }],
-  },
-  maintenanceMeta: {
-    flex: 1,
-    gap: 2,
-  },
-  maintenanceTitle: {
-    color: colors.textPrimary,
-    fontSize: 13.5,
-    fontWeight: '800',
-  },
-  maintenanceCaption: {
-    color: colors.textMuted,
-    fontSize: 12.5,
-    lineHeight: 17,
   },
   logoutBtn: {
     height: 48,
