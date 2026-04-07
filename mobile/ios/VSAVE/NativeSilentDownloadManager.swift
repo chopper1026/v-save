@@ -39,6 +39,7 @@ private struct NativeSilentDownloadTask: Codable {
   var retryCount: Int?
   var nativeTaskIdentifier: Int?
   var serverTaskId: String?
+  var serverTaskPollIntervalMs: Int?
   var authPolicy: String?
   var fileExtension: String?
   var downloadedFilePath: String?
@@ -74,6 +75,7 @@ private struct NativePreparedDownload {
   var runtimeTraceId: String?
   var fileExtension: String?
   var serverTaskId: String?
+  var pollIntervalMs: Int?
   var authPolicy: String
 }
 
@@ -84,6 +86,11 @@ private struct NativeSilentDownloadPauseError: Error {
 
 private struct NativeSilentDownloadRetryablePrepareError: Error {
   let message: String
+}
+
+private struct NativeServerTaskProgressPoller {
+  let id: UUID
+  let task: Task<Void, Never>
 }
 
 private enum NativeSilentDownloadKeychain {
@@ -143,6 +150,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
   private var activeTaskId: String?
   private var backgroundCompletionHandler: (() -> Void)?
   private var runtimeBackgroundTaskIdentifiers: [String: UIBackgroundTaskIdentifier] = [:]
+  private var serverTaskProgressPollers: [String: NativeServerTaskProgressPoller] = [:]
 
   private lazy var backgroundSession: URLSession = {
     let configuration = URLSessionConfiguration.background(withIdentifier: backgroundSessionIdentifier)
@@ -313,8 +321,32 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
         return
       }
 
+      let isServerTask = self.snapshot.tasks[index].serverTaskId?.nilIfEmpty != nil
+      var didChange = false
+      if isServerTask && totalBytesWritten > 0 {
+        self.cancelServerTaskProgressPolling(taskId: taskId)
+      }
+
       let progress: Int
-      if totalBytesExpectedToWrite > 0 {
+      if isServerTask && totalBytesWritten > 0 && totalBytesExpectedToWrite > 0 {
+        let ratio = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        progress = min(
+          95,
+          max(
+            self.snapshot.tasks[index].progress,
+            81 + Int((ratio * 14.0).rounded())
+          )
+        )
+      } else if isServerTask && totalBytesWritten > 0 {
+        let loadedMb = Double(totalBytesWritten) / (1024.0 * 1024.0)
+        progress = min(
+          95,
+          max(
+            self.snapshot.tasks[index].progress,
+            81 + Int((log2(loadedMb + 1.0) * 4.0).rounded())
+          )
+        )
+      } else if totalBytesExpectedToWrite > 0 {
         let ratio = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
         progress = min(95, max(5, Int((ratio * 90.0).rounded())))
       } else if totalBytesWritten > 0 {
@@ -326,6 +358,10 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
 
       if progress > self.snapshot.tasks[index].progress {
         self.snapshot.tasks[index].progress = progress
+        didChange = true
+      }
+
+      if didChange {
         self.snapshot.tasks[index].updatedAt = self.nowMs()
         self.persistSnapshot()
         self.emitSnapshot()
@@ -351,6 +387,8 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
       guard self.snapshot.tasks[index].status == .downloading else {
         return
       }
+
+      self.cancelServerTaskProgressPolling(taskId: taskId)
 
       let statusCode = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 200
       if !(200 ... 299).contains(statusCode) {
@@ -502,6 +540,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     snapshot.tasks[index].finishedAt = nil
     snapshot.tasks[index].nativeTaskIdentifier = nil
     snapshot.tasks[index].serverTaskId = nil
+    snapshot.tasks[index].serverTaskPollIntervalMs = nil
     snapshot.tasks[index].downloadedFilePath = nil
     snapshot.tasks[index].photoAssetId = nil
   }
@@ -538,11 +577,22 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
           snapshot.tasks[index].updatedAt = nowMs()
           didChange = true
         }
+        if let serverTaskId = snapshot.tasks[index].serverTaskId?.nilIfEmpty {
+          startServerTaskProgressPolling(
+            taskId: taskId,
+            serverTaskId: serverTaskId,
+            pollIntervalMs: snapshot.tasks[index].serverTaskPollIntervalMs ?? 1200,
+            runtimeTraceId: snapshot.tasks[index].runtimeTraceId
+          )
+        } else {
+          cancelServerTaskProgressPolling(taskId: taskId)
+        }
         activeTaskId = taskId
         continue
       }
 
       if let fileURL = existingDownloadedFileUrl(for: snapshot.tasks[index]) {
+        cancelServerTaskProgressPolling(taskId: taskId)
         snapshot.tasks[index].status = .saving
         snapshot.tasks[index].progress = max(snapshot.tasks[index].progress, 96)
         snapshot.tasks[index].updatedAt = nowMs()
@@ -556,6 +606,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
         return
       }
 
+      cancelServerTaskProgressPolling(taskId: taskId)
       requeueTaskForRecovery(at: index)
       didChange = true
     }
@@ -705,6 +756,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
         runtimeTraceId: runtimeTraceId,
         fileExtension: "mp4",
         serverTaskId: serverTaskId,
+        pollIntervalMs: max(500, Int((dataPayload["pollIntervalMs"] as? NSNumber)?.doubleValue ?? 1200)),
         authPolicy: authPolicy.isEmpty ? "bearer" : authPolicy
       )
     }
@@ -726,6 +778,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
       runtimeTraceId: runtimeTraceId,
       fileExtension: String(dataPayload["fileExtension"] as? String ?? "").nilIfEmpty,
       serverTaskId: nil,
+      pollIntervalMs: nil,
       authPolicy: authPolicy.isEmpty ? "none" : authPolicy
     )
   }
@@ -767,6 +820,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     snapshot.tasks[index].iosCompatible = prepared.iosCompatible
     snapshot.tasks[index].runtimeTraceId = prepared.runtimeTraceId
     snapshot.tasks[index].serverTaskId = prepared.serverTaskId
+    snapshot.tasks[index].serverTaskPollIntervalMs = prepared.pollIntervalMs
     snapshot.tasks[index].authPolicy = prepared.authPolicy
     snapshot.tasks[index].fileExtension = prepared.fileExtension
     snapshot.tasks[index].downloadedFilePath = nil
@@ -774,6 +828,16 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     snapshot.tasks[index].nativeTaskIdentifier = downloadTask.taskIdentifier
     persistSnapshot()
     emitSnapshot()
+    if let serverTaskId = prepared.serverTaskId?.nilIfEmpty {
+      startServerTaskProgressPolling(
+        taskId: taskId,
+        serverTaskId: serverTaskId,
+        pollIntervalMs: prepared.pollIntervalMs ?? 1200,
+        runtimeTraceId: prepared.runtimeTraceId
+      )
+    } else {
+      cancelServerTaskProgressPolling(taskId: taskId)
+    }
     endRuntimeBackgroundTask(taskId: taskId)
   }
 
@@ -783,6 +847,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
 
   private func handleTerminalFailure(taskId: String, error: Error, allowRefreshRetry: Bool) {
     guard let index = snapshot.tasks.firstIndex(where: { $0.id == taskId }) else {
+      cancelServerTaskProgressPolling(taskId: taskId)
       endRuntimeBackgroundTask(taskId: taskId)
       activeTaskId = nil
       startNextQueuedTaskIfPossible()
@@ -798,8 +863,10 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
       snapshot.tasks[index].errorMessage = nil
       snapshot.tasks[index].nativeTaskIdentifier = nil
       snapshot.tasks[index].serverTaskId = nil
+      snapshot.tasks[index].serverTaskPollIntervalMs = nil
       snapshot.tasks[index].downloadedFilePath = nil
       activeTaskId = nil
+      cancelServerTaskProgressPolling(taskId: taskId)
       endRuntimeBackgroundTask(taskId: taskId)
       persistSnapshot()
       emitSnapshot()
@@ -814,6 +881,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
       snapshot.tasks[index].errorMessage = pauseError.message
       snapshot.tasks[index].nativeTaskIdentifier = nil
       snapshot.tasks[index].serverTaskId = nil
+      snapshot.tasks[index].serverTaskPollIntervalMs = nil
       snapshot.tasks[index].finishedAt = nil
 
       if pauseError.reason == "photo_permission_denied",
@@ -828,6 +896,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
       }
 
       activeTaskId = nil
+      cancelServerTaskProgressPolling(taskId: taskId)
       endRuntimeBackgroundTask(taskId: taskId)
       persistSnapshot()
       emitSnapshot()
@@ -846,9 +915,11 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     snapshot.tasks[index].errorMessage = error.localizedDescription
     snapshot.tasks[index].nativeTaskIdentifier = nil
     snapshot.tasks[index].serverTaskId = nil
+    snapshot.tasks[index].serverTaskPollIntervalMs = nil
     snapshot.tasks[index].downloadedFilePath = nil
 
     activeTaskId = nil
+    cancelServerTaskProgressPolling(taskId: taskId)
     endRuntimeBackgroundTask(taskId: taskId)
     persistSnapshot()
     emitSnapshot()
@@ -874,6 +945,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     snapshot.tasks[index].errorMessage = nil
     snapshot.tasks[index].nativeTaskIdentifier = nil
     snapshot.tasks[index].serverTaskId = nil
+    snapshot.tasks[index].serverTaskPollIntervalMs = nil
     snapshot.tasks[index].downloadedFilePath = nil
     snapshot.tasks[index].photoAssetId = nil
     snapshot.tasks[index].fileExtension = nil
@@ -910,6 +982,7 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
 
   private func markTaskCompleted(taskId: String, photoAssetId: String?) {
     guard let index = snapshot.tasks.firstIndex(where: { $0.id == taskId }) else {
+      cancelServerTaskProgressPolling(taskId: taskId)
       endRuntimeBackgroundTask(taskId: taskId)
       activeTaskId = nil
       startNextQueuedTaskIfPossible()
@@ -923,9 +996,11 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     snapshot.tasks[index].errorMessage = nil
     snapshot.tasks[index].nativeTaskIdentifier = nil
     snapshot.tasks[index].serverTaskId = nil
+    snapshot.tasks[index].serverTaskPollIntervalMs = nil
     snapshot.tasks[index].downloadedFilePath = nil
     snapshot.tasks[index].photoAssetId = photoAssetId
     activeTaskId = nil
+    cancelServerTaskProgressPolling(taskId: taskId)
     endRuntimeBackgroundTask(taskId: taskId)
     persistSnapshot()
     emitSnapshot()
@@ -989,6 +1064,147 @@ final class NativeSilentDownloadService: NSObject, URLSessionDownloadDelegate, U
     try? fileManager.removeItem(at: destination)
     try fileManager.moveItem(at: location, to: destination)
     return destination
+  }
+
+  private func startServerTaskProgressPolling(
+    taskId: String,
+    serverTaskId: String,
+    pollIntervalMs: Int,
+    runtimeTraceId: String?
+  ) {
+    cancelServerTaskProgressPolling(taskId: taskId)
+
+    let apiBaseUrl = config.apiBaseUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !apiBaseUrl.isEmpty,
+          let token = authToken?.nilIfEmpty,
+          let url = URL(string: "\(apiBaseUrl)/download/tasks/\(serverTaskId)")
+    else {
+      return
+    }
+
+    let normalizedPollIntervalMs = max(500, pollIntervalMs)
+    let pollerId = UUID()
+    let pollerTask = Task { [weak self] in
+      guard let self else {
+        return
+      }
+
+      while !Task.isCancelled {
+        do {
+          let serverSnapshot = try await self.fetchServerTaskProgress(
+            url: url,
+            authToken: token,
+            runtimeTraceId: runtimeTraceId
+          )
+          self.queue.async {
+            self.applyServerTaskProgress(
+              taskId: taskId,
+              serverTaskId: serverTaskId,
+              serverStatus: serverSnapshot.status,
+              serverProgress: serverSnapshot.progress
+            )
+          }
+          if serverSnapshot.status == "completed" ||
+              serverSnapshot.status == "failed" ||
+              serverSnapshot.status == "expired" {
+            break
+          }
+        } catch {
+          // Best-effort progress telemetry. The background file request remains the source of truth.
+        }
+
+        try? await Task.sleep(nanoseconds: UInt64(normalizedPollIntervalMs) * 1_000_000)
+      }
+
+      self.queue.async {
+        guard self.serverTaskProgressPollers[taskId]?.id == pollerId else {
+          return
+        }
+        self.serverTaskProgressPollers.removeValue(forKey: taskId)
+      }
+    }
+
+    serverTaskProgressPollers[taskId] = NativeServerTaskProgressPoller(id: pollerId, task: pollerTask)
+  }
+
+  private func cancelServerTaskProgressPolling(taskId: String) {
+    guard let poller = serverTaskProgressPollers.removeValue(forKey: taskId) else {
+      return
+    }
+
+    poller.task.cancel()
+  }
+
+  private func fetchServerTaskProgress(
+    url: URL,
+    authToken: String,
+    runtimeTraceId: String?
+  ) async throws -> (status: String, progress: Int) {
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    request.timeoutInterval = 20
+    request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+    if let traceId = runtimeTraceId?.nilIfEmpty {
+      request.setValue(traceId, forHTTPHeaderField: "x-runtime-trace-id")
+    }
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 200
+    let json = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    if !(200 ... 299).contains(statusCode) {
+      let message = resolveApiErrorMessage(json) ?? "静默下载任务进度查询失败（HTTP \(statusCode)）"
+      throw NSError(domain: "NativeSilentDownload", code: statusCode, userInfo: [
+        NSLocalizedDescriptionKey: message,
+      ])
+    }
+
+    let payload = (json["data"] as? [String: Any]) ?? json
+    let status = String(payload["status"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let rawProgress =
+      (payload["progress"] as? NSNumber)?.doubleValue ??
+      Double(String(payload["progress"] as? String ?? "")) ??
+      0
+    let progress = max(0, min(100, Int(rawProgress.rounded())))
+    return (status: status, progress: progress)
+  }
+
+  private func applyServerTaskProgress(
+    taskId: String,
+    serverTaskId: String,
+    serverStatus: String,
+    serverProgress: Int
+  ) {
+    guard let index = snapshot.tasks.firstIndex(where: { $0.id == taskId }) else {
+      cancelServerTaskProgressPolling(taskId: taskId)
+      return
+    }
+    guard snapshot.tasks[index].status == .downloading else {
+      cancelServerTaskProgressPolling(taskId: taskId)
+      return
+    }
+    guard snapshot.tasks[index].serverTaskId?.nilIfEmpty == serverTaskId else {
+      cancelServerTaskProgressPolling(taskId: taskId)
+      return
+    }
+
+    let mappedProgress = mapServerTaskProgressToNativeProgress(serverProgress)
+    if serverStatus == "completed" || serverStatus == "failed" || serverStatus == "expired" {
+      cancelServerTaskProgressPolling(taskId: taskId)
+    }
+
+    guard mappedProgress > snapshot.tasks[index].progress else {
+      return
+    }
+
+    snapshot.tasks[index].progress = mappedProgress
+    snapshot.tasks[index].updatedAt = nowMs()
+    persistSnapshot()
+    emitSnapshot()
+  }
+
+  private func mapServerTaskProgressToNativeProgress(_ progress: Int) -> Int {
+    let clamped = max(0, min(100, progress))
+    return min(80, max(5, 5 + Int((Double(clamped) / 100.0 * 75.0).rounded())))
   }
 
   private func cachedDownloadedFileUrl(taskId: String, fileExtension: String?) throws -> URL {
