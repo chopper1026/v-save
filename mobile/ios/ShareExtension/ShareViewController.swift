@@ -73,16 +73,7 @@ class ShareViewController: UIViewController {
         if let url = try? await attachment.loadItem(forTypeIdentifier: self.vcardContentType) as? URL {
           // ensure a .vcf file extension so mime resolves properly
           let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".vcf")
-          do {
-            if FileManager.default.fileExists(atPath: tmp.path) {
-              try FileManager.default.removeItem(at: tmp)
-            }
-            try FileManager.default.copyItem(at: url, to: tmp)
-          } catch {
-            NSLog("[ERROR] Cannot copy vCard item at \(url) to \(tmp): \(error)")
-            await self.dismissWithError(message: "Cannot prepare vCard file: \(error.localizedDescription)")
-            return
-          }
+          _ = self.copyFile(at: url, to: tmp)
           Task { @MainActor in
             await self.handleFileURL(content: content, url: tmp, index: index)
           }

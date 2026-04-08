@@ -2,34 +2,6 @@ internal import Expo
 import React
 import ReactAppDependencyProvider
 
-private final class BackgroundURLSessionCompletionGate {
-  private let lock = NSLock()
-  private let completionHandler: () -> Void
-  private var pendingCallbacks = 2
-  private var completed = false
-
-  init(completionHandler: @escaping () -> Void) {
-    self.completionHandler = completionHandler
-  }
-
-  func markFinished() {
-    lock.lock()
-    defer { lock.unlock() }
-
-    guard !completed else {
-      return
-    }
-
-    pendingCallbacks -= 1
-    guard pendingCallbacks <= 0 else {
-      return
-    }
-
-    completed = true
-    DispatchQueue.main.async(execute: completionHandler)
-  }
-}
-
 @main
 class AppDelegate: ExpoAppDelegate {
   var window: UIWindow?
@@ -76,29 +48,6 @@ class AppDelegate: ExpoAppDelegate {
   ) -> Bool {
     let result = RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
     return super.application(application, continue: userActivity, restorationHandler: restorationHandler) || result
-  }
-
-  public override func application(
-    _ application: UIApplication,
-    handleEventsForBackgroundURLSession identifier: String,
-    completionHandler: @escaping () -> Void
-  ) {
-    let completionGate = BackgroundURLSessionCompletionGate(
-      completionHandler: completionHandler
-    )
-    NativeSilentDownloadService.shared.handleEventsForBackgroundURLSession(
-      identifier: identifier,
-      completionHandler: {
-        completionGate.markFinished()
-      }
-    )
-    super.application(
-      application,
-      handleEventsForBackgroundURLSession: identifier,
-      completionHandler: {
-        completionGate.markFinished()
-      }
-    )
   }
 }
 

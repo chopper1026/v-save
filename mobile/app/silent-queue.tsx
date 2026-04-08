@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,6 +23,10 @@ import {
 import { showInAppTopToast } from '@/lib/in-app-toast';
 import { logSilentDownloadDebug } from '@/lib/silent-download-debug';
 import { resolveSilentDownloadTaskTimeMeta } from '@/lib/silent-download-task-presentation';
+import {
+  resolveSilentQueueRetryFeedback,
+  resolveSilentQueueRetryPresentation,
+} from '@/lib/silent-queue-retry-presentation';
 import { useAuthStore } from '@/store/auth-store';
 import {
   getSilentDownloadTaskSummary,
@@ -66,9 +71,17 @@ const formatTime = (value?: number): string => {
 const TaskCard = ({
   task,
   onRemove,
+  onRetry,
+  retryAction,
 }: {
   task: SilentDownloadTask;
   onRemove: (taskId: string) => void;
+  onRetry?: (task: SilentDownloadTask) => void;
+  retryAction?: {
+    visible: boolean;
+    disabled: boolean;
+    label: string;
+  };
 }) => {
   const color = statusColor[task.status];
   const timeMeta = resolveSilentDownloadTaskTimeMeta(task);
@@ -109,6 +122,17 @@ const TaskCard = ({
           {task.errorMessage}
         </Text>
       ) : null}
+
+      {retryAction?.visible ? (
+        <Pressable
+          style={[styles.retryBtn, retryAction.disabled ? styles.retryBtnDisabled : null]}
+          onPress={() => onRetry?.(task)}
+          disabled={retryAction.disabled}
+        >
+          <Ionicons name="refresh-outline" size={14} color={colors.primaryDark} />
+          <Text style={styles.retryBtnText}>{retryAction.label}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 };
@@ -125,6 +149,7 @@ export default function SilentQueueScreen() {
   const tasks = useSilentDownloadQueueStore((state) => state.tasks);
   const pausedReason = useSilentDownloadQueueStore((state) => state.pausedReason);
   const pauseMessage = useSilentDownloadQueueStore((state) => state.pauseMessage);
+  const [retryingTaskIds, setRetryingTaskIds] = useState<string[]>([]);
   const handledShareIntentKeyRef = useRef<string | null>(null);
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
 
@@ -223,6 +248,39 @@ export default function SilentQueueScreen() {
   }, [tasks]);
   const summary = getSilentDownloadTaskSummary(tasks);
 
+  const onRetryFailedTask = async (task: SilentDownloadTask) => {
+    if (task.status !== 'failed') {
+      return;
+    }
+    if (retryingTaskIds.includes(task.id)) {
+      return;
+    }
+
+    const sourceUrl = String(task.sourceUrl || '').trim();
+    if (!sourceUrl) {
+      showInAppTopToast({
+        title: '重试失败',
+        message: '当前任务缺少可重试的视频链接。',
+        level: 'error',
+      });
+      return;
+    }
+
+    setRetryingTaskIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
+    try {
+      const { accepted } = await enqueueSilentDownloadSourceUrl(sourceUrl);
+      showInAppTopToast(resolveSilentQueueRetryFeedback({ accepted }));
+    } catch (_error) {
+      showInAppTopToast({
+        title: '重试失败',
+        message: '重试加入静默下载队列失败，请稍后再试。',
+        level: 'error',
+      });
+    } finally {
+      setRetryingTaskIds((prev) => prev.filter((taskId) => taskId !== task.id));
+    }
+  };
+
   return (
     <Screen>
       <View style={styles.headerCard}>
@@ -298,6 +356,14 @@ export default function SilentQueueScreen() {
             onRemove={(taskId) => {
               void removeSilentDownloadTask(taskId);
             }}
+            retryAction={resolveSilentQueueRetryPresentation({
+              platformOs: Platform.OS,
+              taskStatus: activeTask.status,
+              retrying: retryingTaskIds.includes(activeTask.id),
+            })}
+            onRetry={(task) => {
+              void onRetryFailedTask(task);
+            }}
           />
         ) : (
           <View style={styles.emptyCard}>
@@ -325,6 +391,14 @@ export default function SilentQueueScreen() {
               task={task}
               onRemove={(taskId) => {
                 void removeSilentDownloadTask(taskId);
+              }}
+              retryAction={resolveSilentQueueRetryPresentation({
+                platformOs: Platform.OS,
+                taskStatus: task.status,
+                retrying: retryingTaskIds.includes(task.id),
+              })}
+              onRetry={(targetTask) => {
+                void onRetryFailedTask(targetTask);
               }}
             />
           ))
@@ -512,6 +586,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.danger,
     lineHeight: 18,
+  },
+  retryBtn: {
+    marginTop: 2,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#C6D8FF',
+    backgroundColor: '#ECF3FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  retryBtnDisabled: {
+    opacity: 0.55,
+  },
+  retryBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.primaryDark,
   },
   emptyCard: {
     borderRadius: 16,
